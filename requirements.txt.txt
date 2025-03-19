@@ -1,4 +1,0 @@
-streamlit
-pandas
-plotly
-Create this file in the same directory as petrol_dashboard.py
