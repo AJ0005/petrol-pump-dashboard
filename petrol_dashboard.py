@@ -33,6 +33,7 @@ st.markdown("""
 SALES_DATA_PATH = "petrol_sales.csv"
 PARTY_LEDGER_PATH = "party_ledger.csv"
 EMPLOYEE_SHORTAGE_PATH = "employee_shortage.csv"
+OWNERS_TRANSACTION_PATH = "owners_transaction.csv"
 
 # Initialize CSVs
 def init_csv():
@@ -61,6 +62,8 @@ def init_csv():
         pd.DataFrame(columns=["id", "date", "party_name", "credit_amount", "debit_amount"]).to_csv(PARTY_LEDGER_PATH, index=False)
     if not os.path.exists(EMPLOYEE_SHORTAGE_PATH):
         pd.DataFrame(columns=["id", "date", "employee_name", "shortage_amount"]).to_csv(EMPLOYEE_SHORTAGE_PATH, index=False)
+    if not os.path.exists(OWNERS_TRANSACTION_PATH):
+        pd.DataFrame(columns=["id", "date", "owner_name", "amount", "mode", "type"]).to_csv(OWNERS_TRANSACTION_PATH, index=False)
 
 init_csv()
 
@@ -117,6 +120,16 @@ def load_employee_shortage():
     except Exception as e:
         st.error(f"Employee Shortage Load Error: {str(e)}")
         return pd.DataFrame(columns=["id", "date", "employee_name", "shortage_amount", "Date"])
+
+# Load Owner's Transactions
+def load_owners_transactions():
+    try:
+        df = pd.read_csv(OWNERS_TRANSACTION_PATH)
+        df["Date"] = pd.to_datetime(df["date"], errors='coerce')
+        return df
+    except Exception as e:
+        st.error(f"Owner's Transaction Load Error: {str(e)}")
+        return pd.DataFrame(columns=["id", "date", "owner_name", "amount", "mode", "type", "Date"])
 
 # Save Sales Data
 def save_sales_data(selected_date, data_dict):
@@ -197,6 +210,19 @@ def save_employee_shortage(selected_date, employee_name, shortage_amount):
     df = pd.concat([df.drop(columns=["Date"]), new_row], ignore_index=True)
     df.to_csv(EMPLOYEE_SHORTAGE_PATH, index=False)
     st.sidebar.success(f"Saved Employee Shortage! Rows now: {len(df)}")
+    st.rerun()
+
+# Save Owner's Transaction
+def save_owners_transaction(selected_date, owner_name, amount, mode, transaction_type):
+    df = load_owners_transactions()
+    new_id = df["id"].max() + 1 if not df.empty else 1
+    new_row = pd.DataFrame({
+        "id": [new_id], "date": [str(selected_date)],
+        "owner_name": [owner_name], "amount": [amount], "mode": [mode], "type": [transaction_type]
+    })
+    df = pd.concat([df.drop(columns=["Date"]), new_row], ignore_index=True)
+    df.to_csv(OWNERS_TRANSACTION_PATH, index=False)
+    st.sidebar.success(f"Saved Owner's Transaction! Rows now: {len(df)}")
     st.rerun()
 
 # Delete Sales Data
@@ -306,6 +332,15 @@ shortage_amount = st.sidebar.number_input("Shortage Amount (₹)", min_value=0.0
 if st.sidebar.button("💾 Save Shortage"):
     save_employee_shortage(selected_date, employee_name, shortage_amount)
 
+# Owner's Transaction Entry
+st.sidebar.subheader("👑 Owner’s Transaction")
+owner_name = st.sidebar.text_input("Owner Name")
+owner_amount = st.sidebar.number_input("Amount (₹)", min_value=0.0, step=0.1, value=0.0)
+owner_mode = st.sidebar.selectbox("Mode of Transaction", ["Online", "Cheque", "Cash"])
+owner_type = st.sidebar.selectbox("Type", ["Credit", "Debit"])
+if st.sidebar.button("💾 Save Owner Transaction"):
+    save_owners_transaction(selected_date, owner_name, owner_amount, owner_mode, owner_type)
+
 # Delete Section
 st.sidebar.subheader("🗑️ Delete Sales Data")
 delete_range = st.sidebar.date_input("📅 Delete Range", value=[today, today], key="delete_range")
@@ -325,8 +360,9 @@ if len(delete_range) == 2:
 sales_df = load_sales_data()
 party_df = load_party_ledger()
 shortage_df = load_employee_shortage()
+owners_df = load_owners_transactions()
 
-if sales_df.empty and party_df.empty and shortage_df.empty:
+if sales_df.empty and party_df.empty and shortage_df.empty and owners_df.empty:
     st.warning("No data available.")
 else:
     # Filter Data
@@ -336,17 +372,20 @@ else:
         sales_mask = (sales_df["Date"].dt.date >= start_date) & (sales_df["Date"].dt.date <= end_date)
         party_mask = (party_df["Date"].dt.date >= start_date) & (party_df["Date"].dt.date <= end_date)
         shortage_mask = (shortage_df["Date"].dt.date >= start_date) & (shortage_df["Date"].dt.date <= end_date)
+        owners_mask = (owners_df["Date"].dt.date >= start_date) & (owners_df["Date"].dt.date <= end_date)
         title_suffix = f" ({start_date} to {end_date})"
     else:
         start_date = today
         sales_mask = (sales_df["Date"].dt.date == start_date)
         party_mask = (party_df["Date"].dt.date == start_date)
         shortage_mask = (shortage_df["Date"].dt.date == start_date)
+        owners_mask = (owners_df["Date"].dt.date == start_date)
         title_suffix = f" ({start_date})"
     
     filtered_sales_df = sales_df.loc[sales_mask]
     filtered_party_df = party_df.loc[party_mask]
     filtered_shortage_df = shortage_df.loc[shortage_mask]
+    filtered_owners_df = owners_df.loc[owners_mask]
 
     if filtered_sales_df.empty:
         st.warning("No sales data in selected range.")
@@ -460,6 +499,26 @@ else:
         shortage_chart_data = shortage_summary[["employee_name", "shortage_amount"]].set_index("employee_name")
         st.bar_chart(shortage_chart_data)
 
+    # Owner's Transaction Section
+    if not filtered_owners_df.empty:
+        st.markdown(f"<h2>👑 Owner’s Transactions{title_suffix}</h2>", unsafe_allow_html=True)
+        owners_credit = filtered_owners_df[filtered_owners_df["type"] == "Credit"]["amount"].sum()
+        owners_debit = filtered_owners_df[filtered_owners_df["type"] == "Debit"]["amount"].sum()
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"<div class='metric-box'><span class='metric-label'>📈 Total Owner’s Credit (₹)</span><br><span class='metric-value' style='color: #27ae60;'>{owners_credit:.2f}</span></div>", unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"<div class='metric-box'><span class='metric-label'>📉 Total Owner’s Debit (₹)</span><br><span class='metric-value' style='color: #e74c3c;'>{owners_debit:.2f}</span></div>", unsafe_allow_html=True)
+
+        st.subheader("Owner’s Transaction Summary")
+        owners_summary = filtered_owners_df.groupby(["owner_name", "mode", "type"]).agg({"amount": "sum"}).reset_index()
+        st.dataframe(owners_summary)
+
+        st.subheader("Owner’s Credit vs Debit by Owner (₹)")
+        owners_chart_data = filtered_owners_df.pivot_table(index="owner_name", columns="type", values="amount", aggfunc="sum", fill_value=0)
+        st.bar_chart(owners_chart_data)
+
     # Downloads
     if not filtered_sales_df.empty:
         sales_csv = filtered_sales_df.to_csv(index=False)
@@ -470,6 +529,9 @@ else:
     if not filtered_shortage_df.empty:
         shortage_csv = filtered_shortage_df.to_csv(index=False)
         st.download_button("📥 Download Employee Shortage", data=shortage_csv, file_name=f"shortage_{start_date}_to_{end_date}.csv", mime="text/csv")
+    if not filtered_owners_df.empty:
+        owners_csv = filtered_owners_df.to_csv(index=False)
+        st.download_button("📥 Download Owner’s Transactions", data=owners_csv, file_name=f"owners_transactions_{start_date}_to_{end_date}.csv", mime="text/csv")
 
 # Footer
 st.markdown("<hr><p style='text-align: center; color: #7f8c8d;'>Chhatrapati Petroleum</p>", unsafe_allow_html=True)
