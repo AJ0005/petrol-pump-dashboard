@@ -260,6 +260,11 @@ def load_and_filter_data(start_date, end_date):
     shortage_df = load_employee_shortage()
     owners_df = load_owners_transactions()
 
+    # Debug: Show raw dates
+    st.sidebar.write(f"Filtering from {start_date} to {end_date}")
+    if not sales_df.empty:
+        st.sidebar.write("Raw Sales Dates:", sales_df["date"].tolist())
+
     # Filter data
     sales_mask = (sales_df["Date"].dt.date >= start_date) & (sales_df["Date"].dt.date <= end_date)
     party_mask = (party_df["Date"].dt.date >= start_date) & (party_df["Date"].dt.date <= end_date)
@@ -270,6 +275,12 @@ def load_and_filter_data(start_date, end_date):
     filtered_party_df = party_df.loc[party_mask]
     filtered_shortage_df = shortage_df.loc[shortage_mask]
     filtered_owners_df = owners_df.loc[owners_mask]
+
+    # Debug: Show filtered row counts
+    st.sidebar.write(f"Filtered Sales Rows: {len(filtered_sales_df)}")
+    st.sidebar.write(f"Filtered Party Rows: {len(filtered_party_df)}")
+    st.sidebar.write(f"Filtered Shortage Rows: {len(filtered_shortage_df)}")
+    st.sidebar.write(f"Filtered Owners Rows: {len(filtered_owners_df)}")
 
     return filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, f" ({start_date} to {end_date})"
 
@@ -402,6 +413,9 @@ if len(date_range) == 2:
     start_date, end_date = date_range
 else:
     start_date, end_date = today, today
+
+if st.sidebar.button("🔍 Refresh Dashboard"):
+    st.rerun()
 
 # Load and filter data
 filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, title_suffix = load_and_filter_data(start_date, end_date)
