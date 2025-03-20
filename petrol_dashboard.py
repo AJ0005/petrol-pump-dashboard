@@ -182,8 +182,8 @@ def save_sales_data(selected_date, data_dict):
     })
     df = pd.concat([df.drop(columns=["Date"]), new_row], ignore_index=True)
     df.to_csv(SALES_DATA_PATH, index=False)
-    st.sidebar.success(f"Saved Sales! Rows now: {len(df)}")
-    st.rerun()
+    st.sidebar.success(f"Saved Sales for {selected_date}! Rows now: {len(df)}")
+    # No st.rerun() here to avoid infinite loop; rely on Streamlit's natural reactivity
 
 # Save Party Ledger Entry
 def save_party_ledger(selected_date, party_name, credit_amount, debit_amount):
@@ -195,8 +195,7 @@ def save_party_ledger(selected_date, party_name, credit_amount, debit_amount):
     })
     df = pd.concat([df.drop(columns=["Date"]), new_row], ignore_index=True)
     df.to_csv(PARTY_LEDGER_PATH, index=False)
-    st.sidebar.success(f"Saved Party Ledger! Rows now: {len(df)}")
-    st.rerun()
+    st.sidebar.success(f"Saved Party Ledger for {selected_date}! Rows now: {len(df)}")
 
 # Save Employee Shortage
 def save_employee_shortage(selected_date, employee_name, shortage_amount):
@@ -208,8 +207,7 @@ def save_employee_shortage(selected_date, employee_name, shortage_amount):
     })
     df = pd.concat([df.drop(columns=["Date"]), new_row], ignore_index=True)
     df.to_csv(EMPLOYEE_SHORTAGE_PATH, index=False)
-    st.sidebar.success(f"Saved Employee Shortage! Rows now: {len(df)}")
-    st.rerun()
+    st.sidebar.success(f"Saved Employee Shortage for {selected_date}! Rows now: {len(df)}")
 
 # Save Owner's Transaction
 def save_owners_transaction(selected_date, owner_name, amount, mode, transaction_type):
@@ -221,8 +219,7 @@ def save_owners_transaction(selected_date, owner_name, amount, mode, transaction
     })
     df = pd.concat([df.drop(columns=["Date"]), new_row], ignore_index=True)
     df.to_csv(OWNERS_TRANSACTION_PATH, index=False)
-    st.sidebar.success(f"Saved Owner's Transaction! Rows now: {len(df)}")
-    st.rerun()
+    st.sidebar.success(f"Saved Owner's Transaction for {selected_date}! Rows now: {len(df)}")
 
 # Delete Sales Data
 def delete_sales_data(start_date, end_date):
@@ -254,22 +251,22 @@ def reset_all_data():
     st.rerun()
 
 # Function to load and filter data based on date range
-def load_and_filter_data(start_date, end_date):
+def load_and_filter_data(display_start_date, display_end_date):
     sales_df = load_sales_data()
     party_df = load_party_ledger()
     shortage_df = load_employee_shortage()
     owners_df = load_owners_transactions()
 
     # Debug: Show raw dates
-    st.sidebar.write(f"Filtering from {start_date} to {end_date}")
+    st.sidebar.write(f"Displaying from {display_start_date} to {display_end_date}")
     if not sales_df.empty:
         st.sidebar.write("Raw Sales Dates:", sales_df["date"].tolist())
 
     # Filter data
-    sales_mask = (sales_df["Date"].dt.date >= start_date) & (sales_df["Date"].dt.date <= end_date)
-    party_mask = (party_df["Date"].dt.date >= start_date) & (party_df["Date"].dt.date <= end_date)
-    shortage_mask = (shortage_df["Date"].dt.date >= start_date) & (shortage_df["Date"].dt.date <= end_date)
-    owners_mask = (owners_df["Date"].dt.date >= start_date) & (owners_df["Date"].dt.date <= end_date)
+    sales_mask = (sales_df["Date"].dt.date >= display_start_date) & (sales_df["Date"].dt.date <= display_end_date)
+    party_mask = (party_df["Date"].dt.date >= display_start_date) & (party_df["Date"].dt.date <= display_end_date)
+    shortage_mask = (shortage_df["Date"].dt.date >= display_start_date) & (shortage_df["Date"].dt.date <= display_end_date)
+    owners_mask = (owners_df["Date"].dt.date >= display_start_date) & (owners_df["Date"].dt.date <= display_end_date)
 
     filtered_sales_df = sales_df.loc[sales_mask]
     filtered_party_df = party_df.loc[party_mask]
@@ -282,7 +279,7 @@ def load_and_filter_data(start_date, end_date):
     st.sidebar.write(f"Filtered Shortage Rows: {len(filtered_shortage_df)}")
     st.sidebar.write(f"Filtered Owners Rows: {len(filtered_owners_df)}")
 
-    return filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, f" ({start_date} to {end_date})"
+    return filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, f" ({display_start_date} to {display_end_date})"
 
 # Title
 st.markdown("<h1>⛽ Petrol Pump Dashboard</h1>", unsafe_allow_html=True)
@@ -290,7 +287,8 @@ st.markdown("<h1>⛽ Petrol Pump Dashboard</h1>", unsafe_allow_html=True)
 # Sidebar
 st.sidebar.header("📊 Data Entry")
 today = date.today()
-selected_date = st.sidebar.date_input("📅 Select Date", value=today)
+selected_date = st.sidebar.date_input("📅 Select Date for Entry", value=today)
+st.sidebar.write(f"Entering data for: {selected_date}")
 
 st.sidebar.subheader("⛽ Petrol Meter Readings (Liters)")
 petrol_c3_open = st.sidebar.number_input("C3 Opening", min_value=0.0, step=0.1)
@@ -407,18 +405,15 @@ if st.sidebar.button("🔄 Reset All Data", type="primary"):
         st.sidebar.write("Please check 'Confirm Reset' to proceed.")
 
 # Filter Dashboard Data
-st.sidebar.subheader("📅 Filter Dashboard Data")
-date_range = st.sidebar.date_input("Select Date Range", value=[today, today], key="filter_range")
+st.sidebar.subheader("📅 Filter Dashboard Data (Optional)")
+date_range = st.sidebar.date_input("Select Date Range for Display", value=[selected_date, selected_date], key="filter_range")
 if len(date_range) == 2:
-    start_date, end_date = date_range
+    display_start_date, display_end_date = date_range
 else:
-    start_date, end_date = today, today
+    display_start_date, display_end_date = selected_date, selected_date
 
-if st.sidebar.button("🔍 Refresh Dashboard"):
-    st.rerun()
-
-# Load and filter data
-filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, title_suffix = load_and_filter_data(start_date, end_date)
+# Load and filter data (default to selected_date unless range is specified)
+filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, title_suffix = load_and_filter_data(display_start_date, display_end_date)
 
 # Display Dashboard
 if filtered_sales_df.empty and filtered_party_df.empty and filtered_shortage_df.empty and filtered_owners_df.empty:
@@ -557,16 +552,16 @@ else:
     # Downloads
     if not filtered_sales_df.empty:
         sales_csv = filtered_sales_df.to_csv(index=False)
-        st.download_button("📥 Download Sales Data", data=sales_csv, file_name=f"sales_{start_date}_to_{end_date}.csv", mime="text/csv")
+        st.download_button("📥 Download Sales Data", data=sales_csv, file_name=f"sales_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
     if not filtered_party_df.empty:
         party_csv = filtered_party_df.to_csv(index=False)
-        st.download_button("📥 Download Party Ledger", data=party_csv, file_name=f"party_ledger_{start_date}_to_{end_date}.csv", mime="text/csv")
+        st.download_button("📥 Download Party Ledger", data=party_csv, file_name=f"party_ledger_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
     if not filtered_shortage_df.empty:
         shortage_csv = filtered_shortage_df.to_csv(index=False)
-        st.download_button("📥 Download Employee Shortage", data=shortage_csv, file_name=f"shortage_{start_date}_to_{end_date}.csv", mime="text/csv")
+        st.download_button("📥 Download Employee Shortage", data=shortage_csv, file_name=f"shortage_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
     if not filtered_owners_df.empty:
         owners_csv = filtered_owners_df.to_csv(index=False)
-        st.download_button("📥 Download Owner’s Transactions", data=owners_csv, file_name=f"owners_transactions_{start_date}_to_{end_date}.csv", mime="text/csv")
+        st.download_button("📥 Download Owner’s Transactions", data=owners_csv, file_name=f"owners_transactions_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
 
 # Footer
 st.markdown("<hr><p style='text-align: center; color: #7f8c8d;'>Chhatrapati Petroleum</p>", unsafe_allow_html=True)
