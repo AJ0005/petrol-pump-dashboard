@@ -76,7 +76,6 @@ def load_sales_data():
         for col in required_columns:
             if col not in df.columns:
                 df[col] = 0.0
-        st.sidebar.write(f"Loaded {SALES_DATA_PATH} - Rows: {len(df)}")
         return df
     except Exception as e:
         st.error(f"Sales Load Error: {str(e)}")
@@ -243,6 +242,37 @@ def delete_sales_data(start_date, end_date):
         st.sidebar.error(f"Delete Error: {str(e)}")
         return 0
 
+# Reset All Data
+def reset_all_data():
+    files = [SALES_DATA_PATH, PARTY_LEDGER_PATH, EMPLOYEE_SHORTAGE_PATH, OWNERS_TRANSACTION_PATH]
+    for file in files:
+        if os.path.exists(file):
+            os.remove(file)
+    init_csv()  # Recreate empty CSVs with headers
+    st.sidebar.success("All data reset successfully!")
+    time.sleep(0.5)
+    st.rerun()
+
+# Function to load and filter data based on date range
+def load_and_filter_data(start_date, end_date):
+    sales_df = load_sales_data()
+    party_df = load_party_ledger()
+    shortage_df = load_employee_shortage()
+    owners_df = load_owners_transactions()
+
+    # Filter data
+    sales_mask = (sales_df["Date"].dt.date >= start_date) & (sales_df["Date"].dt.date <= end_date)
+    party_mask = (party_df["Date"].dt.date >= start_date) & (party_df["Date"].dt.date <= end_date)
+    shortage_mask = (shortage_df["Date"].dt.date >= start_date) & (shortage_df["Date"].dt.date <= end_date)
+    owners_mask = (owners_df["Date"].dt.date >= start_date) & (owners_df["Date"].dt.date <= end_date)
+
+    filtered_sales_df = sales_df.loc[sales_mask]
+    filtered_party_df = party_df.loc[party_mask]
+    filtered_shortage_df = shortage_df.loc[shortage_mask]
+    filtered_owners_df = owners_df.loc[owners_mask]
+
+    return filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, f" ({start_date} to {end_date})"
+
 # Title
 st.markdown("<h1>⛽ Petrol Pump Dashboard</h1>", unsafe_allow_html=True)
 
@@ -277,7 +307,7 @@ xp_b3_close = st.sidebar.number_input("B3 Closing (XP)", min_value=xp_b3_open, s
 xp_b4_open = st.sidebar.number_input("B4 Opening (XP)", min_value=0.0, step=0.1)
 xp_b4_close = st.sidebar.number_input("B4 Closing (XP)", min_value=xp_b4_open, step=0.1)
 
-st.sidebar.subheader("🛢️ Oil Sales (Liters)")
+st.sidebar.subheader("🧪 Testing (Liters)")
 test_b1 = st.sidebar.number_input("Test B1", min_value=0.0, step=0.1, value=0.0)
 test_b2 = st.sidebar.number_input("Test B2", min_value=0.0, step=0.1, value=0.0)
 test_b3 = st.sidebar.number_input("Test B3", min_value=0.0, step=0.1, value=0.0)
@@ -356,40 +386,31 @@ if len(delete_range) == 2:
         else:
             st.sidebar.write("Please check 'Confirm Deletion' to proceed.")
 
-# Load and Display Data
-sales_df = load_sales_data()
-party_df = load_party_ledger()
-shortage_df = load_employee_shortage()
-owners_df = load_owners_transactions()
+# Reset All Data Section
+st.sidebar.subheader("🔄 Reset All Data")
+confirm_reset = st.sidebar.checkbox("Confirm Reset (This will delete all data permanently)", value=False)
+if st.sidebar.button("🔄 Reset All Data", type="primary"):
+    if confirm_reset:
+        reset_all_data()
+    else:
+        st.sidebar.write("Please check 'Confirm Reset' to proceed.")
 
-if sales_df.empty and party_df.empty and shortage_df.empty and owners_df.empty:
-    st.warning("No data available.")
+# Filter Dashboard Data
+st.sidebar.subheader("📅 Filter Dashboard Data")
+date_range = st.sidebar.date_input("Select Date Range", value=[today, today], key="filter_range")
+if len(date_range) == 2:
+    start_date, end_date = date_range
 else:
-    # Filter Data
-    date_range = st.sidebar.date_input("📅 Filter Range", value=[today, today], key="filter_range")
-    if len(date_range) == 2:
-        start_date, end_date = date_range
-        sales_mask = (sales_df["Date"].dt.date >= start_date) & (sales_df["Date"].dt.date <= end_date)
-        party_mask = (party_df["Date"].dt.date >= start_date) & (party_df["Date"].dt.date <= end_date)
-        shortage_mask = (shortage_df["Date"].dt.date >= start_date) & (shortage_df["Date"].dt.date <= end_date)
-        owners_mask = (owners_df["Date"].dt.date >= start_date) & (owners_df["Date"].dt.date <= end_date)
-        title_suffix = f" ({start_date} to {end_date})"
-    else:
-        start_date = today
-        sales_mask = (sales_df["Date"].dt.date == start_date)
-        party_mask = (party_df["Date"].dt.date == start_date)
-        shortage_mask = (shortage_df["Date"].dt.date == start_date)
-        owners_mask = (owners_df["Date"].dt.date == start_date)
-        title_suffix = f" ({start_date})"
-    
-    filtered_sales_df = sales_df.loc[sales_mask]
-    filtered_party_df = party_df.loc[party_mask]
-    filtered_shortage_df = shortage_df.loc[shortage_mask]
-    filtered_owners_df = owners_df.loc[owners_mask]
+    start_date, end_date = today, today
 
-    if filtered_sales_df.empty:
-        st.warning("No sales data in selected range.")
-    else:
+# Load and filter data
+filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, title_suffix = load_and_filter_data(start_date, end_date)
+
+# Display Dashboard
+if filtered_sales_df.empty and filtered_party_df.empty and filtered_shortage_df.empty and filtered_owners_df.empty:
+    st.warning(f"No data available for the selected range{title_suffix}.")
+else:
+    if not filtered_sales_df.empty:
         # Sales Metrics
         st.markdown(f"<h2>📈 Key Metrics{title_suffix}</h2>", unsafe_allow_html=True)
         col1, col2, col3, col4 = st.columns(4)
