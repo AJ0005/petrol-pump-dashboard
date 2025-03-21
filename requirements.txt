@@ -1,4 +1,4 @@
 streamlit
 pandas
 plotly-express
- reportlab pandas 
+reportlabpandas 
