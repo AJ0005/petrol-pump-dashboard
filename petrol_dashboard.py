@@ -1,8 +1,14 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import date, datetime
 import os
 import time
+import zipfile
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+import io
 
 # Set page config
 st.set_page_config(layout="wide", page_title="Petrol Pump Dashboard", page_icon="⛽")
@@ -34,6 +40,7 @@ SALES_DATA_PATH = "petrol_sales.csv"
 PARTY_LEDGER_PATH = "party_ledger.csv"
 EMPLOYEE_SHORTAGE_PATH = "employee_shortage.csv"
 OWNERS_TRANSACTION_PATH = "owners_transaction.csv"
+CSV_FILES = [SALES_DATA_PATH, PARTY_LEDGER_PATH, EMPLOYEE_SHORTAGE_PATH, OWNERS_TRANSACTION_PATH]
 
 # Initialize CSVs
 def init_csv():
@@ -53,13 +60,14 @@ def init_csv():
             "test_b1", "test_b2", "test_b3", "test_b4",
             "petrol_rate", "hsd_rate", "xp_rate",
             "petrol_amount", "hsd_amount", "xp_amount",
+            "oil_products", "oil_amounts", "total_oil_amount",
             "gross_sales_amount", "total_sales_amount",
             "paytm_amount", "icici_amount", "fleet_card_amount",
             "pump_expenses", "pump_expenses_remark",
             "cash_in", "cash_out", "net_cash", "credit_balance"
         ]).to_csv(SALES_DATA_PATH, index=False)
     if not os.path.exists(PARTY_LEDGER_PATH):
-        pd.DataFrame(columns=["id", "date", "party_name", "credit_amount", "debit_amount"]).to_csv(PARTY_LEDGER_PATH, index=False)
+        pd.DataFrame(columns=["id", "date", "party_name", "credit_amount", "debit_amount", "remark"]).to_csv(PARTY_LEDGER_PATH, index=False)
     if not os.path.exists(EMPLOYEE_SHORTAGE_PATH):
         pd.DataFrame(columns=["id", "date", "employee_name", "shortage_amount"]).to_csv(EMPLOYEE_SHORTAGE_PATH, index=False)
     if not os.path.exists(OWNERS_TRANSACTION_PATH):
@@ -72,10 +80,10 @@ def load_sales_data():
     try:
         df = pd.read_csv(SALES_DATA_PATH)
         df["Date"] = pd.to_datetime(df["date"], errors='coerce')
-        required_columns = ["cash_in", "cash_out", "net_cash", "credit_balance"]
+        required_columns = ["cash_in", "cash_out", "net_cash", "credit_balance", "oil_products", "oil_amounts", "total_oil_amount"]
         for col in required_columns:
             if col not in df.columns:
-                df[col] = 0.0
+                df[col] = "" if col in ["oil_products", "oil_amounts"] else 0.0
         return df
     except Exception as e:
         st.error(f"Sales Load Error: {str(e)}")
@@ -94,6 +102,7 @@ def load_sales_data():
             "test_b1", "test_b2", "test_b3", "test_b4",
             "petrol_rate", "hsd_rate", "xp_rate",
             "petrol_amount", "hsd_amount", "xp_amount",
+            "oil_products", "oil_amounts", "total_oil_amount",
             "gross_sales_amount", "total_sales_amount",
             "paytm_amount", "icici_amount", "fleet_card_amount",
             "pump_expenses", "pump_expenses_remark",
@@ -105,10 +114,12 @@ def load_party_ledger():
     try:
         df = pd.read_csv(PARTY_LEDGER_PATH)
         df["Date"] = pd.to_datetime(df["date"], errors='coerce')
+        if "remark" not in df.columns:
+            df["remark"] = ""
         return df
     except Exception as e:
         st.error(f"Party Ledger Load Error: {str(e)}")
-        return pd.DataFrame(columns=["id", "date", "party_name", "credit_amount", "debit_amount", "Date"])
+        return pd.DataFrame(columns=["id", "date", "party_name", "credit_amount", "debit_amount", "remark", "Date"])
 
 # Load Employee Shortage
 def load_employee_shortage():
@@ -150,7 +161,11 @@ def save_sales_data(selected_date, data_dict):
     hsd_amount = (hsd_c1_sales + hsd_c2_sales + hsd_b1_sales + hsd_b2_sales) * data_dict["hsd_rate"]
     xp_amount = (xp_b3_sales + xp_b4_sales) * data_dict["xp_rate"]
     
-    gross_sales_amount = petrol_amount + hsd_amount + xp_amount
+    oil_products = ";".join(data_dict["oil_products"]) if data_dict["oil_products"] else ""
+    oil_amounts = ";".join([str(amt) for amt in data_dict["oil_amounts"]]) if data_dict["oil_amounts"] else ""
+    total_oil_amount = sum(data_dict["oil_amounts"]) if data_dict["oil_amounts"] else 0.0
+    
+    gross_sales_amount = petrol_amount + hsd_amount + xp_amount + total_oil_amount
     total_sales_amount = gross_sales_amount - (data_dict["paytm_amount"] + data_dict["icici_amount"] + data_dict["fleet_card_amount"] + data_dict["pump_expenses"])
     
     cash_in = data_dict["paytm_amount"] + data_dict["icici_amount"] + data_dict["fleet_card_amount"]
@@ -174,6 +189,7 @@ def save_sales_data(selected_date, data_dict):
         "test_b3": [data_dict["test_b3"]], "test_b4": [data_dict["test_b4"]],
         "petrol_rate": [data_dict["petrol_rate"]], "hsd_rate": [data_dict["hsd_rate"]], "xp_rate": [data_dict["xp_rate"]],
         "petrol_amount": [petrol_amount], "hsd_amount": [hsd_amount], "xp_amount": [xp_amount],
+        "oil_products": [oil_products], "oil_amounts": [oil_amounts], "total_oil_amount": [total_oil_amount],
         "gross_sales_amount": [gross_sales_amount], "total_sales_amount": [total_sales_amount],
         "paytm_amount": [data_dict["paytm_amount"]], "icici_amount": [data_dict["icici_amount"]],
         "fleet_card_amount": [data_dict["fleet_card_amount"]], "pump_expenses": [data_dict["pump_expenses"]],
@@ -183,15 +199,14 @@ def save_sales_data(selected_date, data_dict):
     df = pd.concat([df.drop(columns=["Date"]), new_row], ignore_index=True)
     df.to_csv(SALES_DATA_PATH, index=False)
     st.sidebar.success(f"Saved Sales for {selected_date}! Rows now: {len(df)}")
-    # No st.rerun() here to avoid infinite loop; rely on Streamlit's natural reactivity
 
 # Save Party Ledger Entry
-def save_party_ledger(selected_date, party_name, credit_amount, debit_amount):
+def save_party_ledger(selected_date, party_name, credit_amount, debit_amount, remark):
     df = load_party_ledger()
     new_id = df["id"].max() + 1 if not df.empty else 1
     new_row = pd.DataFrame({
         "id": [new_id], "date": [str(selected_date)],
-        "party_name": [party_name], "credit_amount": [credit_amount], "debit_amount": [debit_amount]
+        "party_name": [party_name], "credit_amount": [credit_amount], "debit_amount": [debit_amount], "remark": [remark]
     })
     df = pd.concat([df.drop(columns=["Date"]), new_row], ignore_index=True)
     df.to_csv(PARTY_LEDGER_PATH, index=False)
@@ -241,28 +256,87 @@ def delete_sales_data(start_date, end_date):
 
 # Reset All Data
 def reset_all_data():
-    files = [SALES_DATA_PATH, PARTY_LEDGER_PATH, EMPLOYEE_SHORTAGE_PATH, OWNERS_TRANSACTION_PATH]
-    for file in files:
+    for file in CSV_FILES:
         if os.path.exists(file):
             os.remove(file)
-    init_csv()  # Recreate empty CSVs with headers
+    init_csv()
     st.sidebar.success("All data reset successfully!")
     time.sleep(0.5)
     st.rerun()
 
-# Function to load and filter data based on date range
+# Backup Data
+def backup_data():
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_filename = f"petrol_data_backup_{timestamp}.zip"
+    with zipfile.ZipFile(backup_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for file in CSV_FILES:
+            if os.path.exists(file):
+                zipf.write(file)
+    return backup_filename
+
+# Restore Data
+def restore_data(uploaded_file):
+    with zipfile.ZipFile(uploaded_file, 'r') as zipf:
+        zipf.extractall()
+    st.sidebar.success("Data restored successfully!")
+    time.sleep(0.5)
+    st.rerun()
+
+# Generate PDF
+def generate_pdf(title, data_df, columns, totals=None):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Header
+    elements.append(Paragraph(f"{title}", styles['Title']))
+    elements.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
+    elements.append(Spacer(1, 12))
+    
+    # Table
+    data = [columns] + data_df[columns].values.tolist()
+    if totals:
+        total_row = ["Total"] + [""] * (len(columns) - 1)
+        for col in totals:
+            if col in columns:
+                col_idx = columns.index(col)
+                total_row[col_idx] = f"₹{totals[col]:.2f}"
+        data.append(total_row)
+    table = Table(data)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+    ]))
+    elements.append(table)
+    
+    # Footer
+    elements.append(Spacer(1, 12))
+    elements.append(Paragraph("Chhatrapati Petroleum", styles['Normal']))
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
+# Load and filter data
 def load_and_filter_data(display_start_date, display_end_date):
     sales_df = load_sales_data()
     party_df = load_party_ledger()
     shortage_df = load_employee_shortage()
     owners_df = load_owners_transactions()
 
-    # Debug: Show raw dates
     st.sidebar.write(f"Displaying from {display_start_date} to {display_end_date}")
     if not sales_df.empty:
         st.sidebar.write("Raw Sales Dates:", sales_df["date"].tolist())
 
-    # Filter data
     sales_mask = (sales_df["Date"].dt.date >= display_start_date) & (sales_df["Date"].dt.date <= display_end_date)
     party_mask = (party_df["Date"].dt.date >= display_start_date) & (party_df["Date"].dt.date <= display_end_date)
     shortage_mask = (shortage_df["Date"].dt.date >= display_start_date) & (shortage_df["Date"].dt.date <= display_end_date)
@@ -273,7 +347,6 @@ def load_and_filter_data(display_start_date, display_end_date):
     filtered_shortage_df = shortage_df.loc[shortage_mask]
     filtered_owners_df = owners_df.loc[owners_mask]
 
-    # Debug: Show filtered row counts
     st.sidebar.write(f"Filtered Sales Rows: {len(filtered_sales_df)}")
     st.sidebar.write(f"Filtered Party Rows: {len(filtered_party_df)}")
     st.sidebar.write(f"Filtered Shortage Rows: {len(filtered_shortage_df)}")
@@ -327,6 +400,19 @@ petrol_rate = st.sidebar.number_input("Petrol Rate", min_value=0.0, step=0.01, v
 hsd_rate = st.sidebar.number_input("HSD Rate", min_value=0.0, step=0.01, value=91.16)
 xp_rate = st.sidebar.number_input("XP Rate", min_value=0.0, step=0.01, value=111.57)
 
+st.sidebar.subheader("🛢️ Oil Sales (₹)")
+num_oil_products = st.sidebar.number_input("Number of Oil Products", min_value=0, max_value=10, value=0, step=1)
+oil_products = []
+oil_amounts = []
+for i in range(num_oil_products):
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        product_name = st.text_input(f"Oil Product {i+1} Name", key=f"oil_product_{i}")
+    with col2:
+        amount = st.number_input(f"Oil Product {i+1} Amount (₹)", min_value=0.0, step=0.1, key=f"oil_amount_{i}")
+    oil_products.append(product_name)
+    oil_amounts.append(amount)
+
 st.sidebar.subheader("💳 Payment Transactions (₹)")
 paytm_amount = st.sidebar.number_input("Paytm Amount", min_value=0.0, step=0.1, value=0.0)
 icici_amount = st.sidebar.number_input("ICICI Amount", min_value=0.0, step=0.1, value=0.0)
@@ -350,6 +436,7 @@ if st.sidebar.button("💾 Save Sales"):
         "xp_b4_open": xp_b4_open, "xp_b4_close": xp_b4_close,
         "test_b1": test_b1, "test_b2": test_b2, "test_b3": test_b3, "test_b4": test_b4,
         "petrol_rate": petrol_rate, "hsd_rate": hsd_rate, "xp_rate": xp_rate,
+        "oil_products": oil_products, "oil_amounts": oil_amounts,
         "paytm_amount": paytm_amount, "icici_amount": icici_amount,
         "fleet_card_amount": fleet_card_amount, "pump_expenses": pump_expenses,
         "pump_expenses_remark": pump_expenses_remark
@@ -361,8 +448,9 @@ st.sidebar.subheader("📒 Party Ledger")
 party_name = st.sidebar.text_input("Party Name")
 party_credit = st.sidebar.number_input("Credit Amount (₹)", min_value=0.0, step=0.1, value=0.0)
 party_debit = st.sidebar.number_input("Debit Amount (₹)", min_value=0.0, step=0.1, value=0.0)
+party_remark = st.sidebar.text_input("Remark", value="")
 if st.sidebar.button("💾 Save Party Transaction"):
-    save_party_ledger(selected_date, party_name, party_credit, party_debit)
+    save_party_ledger(selected_date, party_name, party_credit, party_debit, party_remark)
 
 # Employee Shortage Entry
 st.sidebar.subheader("👷 Employee Shortage")
@@ -404,6 +492,17 @@ if st.sidebar.button("🔄 Reset All Data", type="primary"):
     else:
         st.sidebar.write("Please check 'Confirm Reset' to proceed.")
 
+# Backup and Restore Section
+st.sidebar.subheader("💾 Backup & Restore")
+if st.sidebar.button("📥 Backup Data"):
+    backup_file = backup_data()
+    with open(backup_file, "rb") as f:
+        st.sidebar.download_button("Download Backup", f, file_name=backup_file, mime="application/zip")
+
+uploaded_file = st.sidebar.file_uploader("Upload Backup ZIP", type="zip")
+if uploaded_file and st.sidebar.button("📤 Restore Data"):
+    restore_data(uploaded_file)
+
 # Filter Dashboard Data
 st.sidebar.subheader("📅 Filter Dashboard Data (Optional)")
 date_range = st.sidebar.date_input("Select Date Range for Display", value=[selected_date, selected_date], key="filter_range")
@@ -412,7 +511,7 @@ if len(date_range) == 2:
 else:
     display_start_date, display_end_date = selected_date, selected_date
 
-# Load and filter data (default to selected_date unless range is specified)
+# Load and filter data
 filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, title_suffix = load_and_filter_data(display_start_date, display_end_date)
 
 # Display Dashboard
@@ -422,7 +521,7 @@ else:
     if not filtered_sales_df.empty:
         # Sales Metrics
         st.markdown(f"<h2>📈 Key Metrics{title_suffix}</h2>", unsafe_allow_html=True)
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
             petrol_sales_l = filtered_sales_df[["petrol_c3_sales", "petrol_c4_sales", "petrol_a1_sales", "petrol_a2_sales"]].sum().sum()
             petrol_sales_r = filtered_sales_df["petrol_amount"].sum()
@@ -436,6 +535,9 @@ else:
             xp_sales_r = filtered_sales_df["xp_amount"].sum()
             st.markdown(f"<div class='metric-box'><span class='metric-label'>⚡ XP Sales</span><br><span class='metric-value' style='color: #8e44ad;'>{xp_sales_l:.2f} L<br>₹{xp_sales_r:.2f}</span></div>", unsafe_allow_html=True)
         with col4:
+            oil_sales_r = filtered_sales_df["total_oil_amount"].sum()
+            st.markdown(f"<div class='metric-box'><span class='metric-label'>🛢️ Oil Sales</span><br><span class='metric-value' style='color: #16a085;'>₹{oil_sales_r:.2f}</span></div>", unsafe_allow_html=True)
+        with col5:
             st.markdown(f"<div class='metric-box'><span class='metric-label'>💵 Total Sales (₹)</span><br><span class='metric-value' style='color: #2980b9;'>₹{filtered_sales_df['total_sales_amount'].sum():.2f}</span></div>", unsafe_allow_html=True)
 
         # Cash Flow Metrics
@@ -452,7 +554,8 @@ else:
             st.markdown(f"<div class='metric-box'><span class='metric-label'>👷 Total Shortage (₹)</span><br><span class='metric-value' style='color: #e74c3c;'>{total_shortage:.2f}</span></div>", unsafe_allow_html=True)
         with col4:
             net_sales = filtered_sales_df["credit_balance"].sum()
-            adjusted_net_sales = net_sales - total_shortage
+            party_net_balance = filtered_party_df["credit_amount"].sum() - filtered_party_df["debit_amount"].sum()
+            adjusted_net_sales = net_sales + party_net_balance - total_shortage
             color = "#c0392b" if adjusted_net_sales > 0 else "#27ae60"
             st.markdown(f"<div class='metric-box'><span class='metric-label'>📊 Net Sales (₹)</span><br><span class='metric-value' style='color: {color};'>{adjusted_net_sales:.2f}</span></div>", unsafe_allow_html=True)
 
@@ -467,17 +570,18 @@ else:
             })
             st.bar_chart(sales_data.set_index("Fuel Type"))
         with col2:
-            st.subheader("Payment Breakdown (₹)")
+            st.subheader("Sales Breakdown (₹)")
             payment_data = pd.DataFrame({
-                "Payment Type": ["Paytm", "ICICI", "Fleet Card", "Expenses"],
+                "Type": ["Petrol", "Diesel", "XP", "Oil", "Expenses"],
                 "Amount (₹)": [
-                    filtered_sales_df["paytm_amount"].sum(),
-                    filtered_sales_df["icici_amount"].sum(),
-                    filtered_sales_df["fleet_card_amount"].sum(),
-                    filtered_sales_df["pump_expenses"].sum()
+                    petrol_sales_r,
+                    hsd_sales_r,
+                    xp_sales_r,
+                    oil_sales_r,
+                    total_expenses
                 ]
             })
-            st.bar_chart(payment_data.set_index("Payment Type"))
+            st.bar_chart(payment_data.set_index("Type"))
 
         # Sales Data Table
         st.subheader("📋 Sales Data")
@@ -485,11 +589,21 @@ else:
             "Date", "petrol_c3_sales", "petrol_c4_sales", "petrol_a1_sales", "petrol_a2_sales",
             "hsd_c1_sales", "hsd_c2_sales", "hsd_b1_sales", "hsd_b2_sales",
             "xp_b3_sales", "xp_b4_sales", "test_b1", "test_b2", "test_b3", "test_b4",
-            "petrol_amount", "hsd_amount", "xp_amount", "gross_sales_amount", "total_sales_amount",
+            "petrol_amount", "hsd_amount", "xp_amount", "oil_products", "oil_amounts", "total_oil_amount",
+            "gross_sales_amount", "total_sales_amount",
             "paytm_amount", "icici_amount", "fleet_card_amount", "pump_expenses", "pump_expenses_remark",
             "cash_in", "cash_out", "net_cash", "credit_balance"
         ]]
         st.dataframe(display_sales_df)
+        
+        # PDF Download for Sales
+        sales_pdf = generate_pdf(
+            f"Sales Report{title_suffix}",
+            display_sales_df,
+            ["Date", "petrol_amount", "hsd_amount", "xp_amount", "total_oil_amount", "total_sales_amount"],
+            {"total_sales_amount": filtered_sales_df["total_sales_amount"].sum()}
+        )
+        st.download_button("📜 Download Sales PDF", sales_pdf, f"sales_report_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
 
     # Party Ledger Section
     if not filtered_party_df.empty:
@@ -508,12 +622,31 @@ else:
             total_debit = party_summary["debit_amount"].sum()
             st.markdown(f"<div class='metric-box'><span class='metric-label'>📉 Total Debit (₹)</span><br><span class='metric-value' style='color: #e74c3c;'>{total_debit:.2f}</span></div>", unsafe_allow_html=True)
 
-        st.subheader("Party Balances")
+        st.subheader("Party Balances Summary")
         st.dataframe(party_summary)
 
         st.subheader("Party Net Balance (₹)")
         party_chart_data = party_summary[["party_name", "Net Balance"]].set_index("party_name")
         st.bar_chart(party_chart_data)
+
+        # Detailed Party Ledger
+        st.subheader("Detailed Party Ledger")
+        for party in party_summary["party_name"].unique():
+            with st.expander(f"Ledger for {party}"):
+                party_transactions = filtered_party_df[filtered_party_df["party_name"] == party][["Date", "credit_amount", "debit_amount", "remark"]]
+                st.dataframe(party_transactions)
+                net_balance = party_summary[party_summary["party_name"] == party]["Net Balance"].values[0]
+                color = "#27ae60" if net_balance >= 0 else "#e74c3c"
+                st.markdown(f"<p style='font-weight: bold; color: {color};'>Net Balance: ₹{net_balance:.2f}</p>", unsafe_allow_html=True)
+                
+                # PDF Download for Party
+                party_pdf = generate_pdf(
+                    f"Party Ledger - {party}{title_suffix}",
+                    party_transactions,
+                    ["Date", "credit_amount", "debit_amount", "remark"],
+                    {"credit_amount": party_transactions["credit_amount"].sum(), "debit_amount": party_transactions["debit_amount"].sum()}
+                )
+                st.download_button(f"📜 Download {party} Ledger PDF", party_pdf, f"party_ledger_{party}_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
 
     # Employee Shortage Section
     if not filtered_shortage_df.empty:
@@ -528,6 +661,15 @@ else:
         st.subheader("Shortage by Employee (₹)")
         shortage_chart_data = shortage_summary[["employee_name", "shortage_amount"]].set_index("employee_name")
         st.bar_chart(shortage_chart_data)
+        
+        # PDF Download for Employee Shortage
+        shortage_pdf = generate_pdf(
+            f"Employee Shortage Report{title_suffix}",
+            filtered_shortage_df,
+            ["Date", "employee_name", "shortage_amount"],
+            {"shortage_amount": filtered_shortage_df["shortage_amount"].sum()}
+        )
+        st.download_button("📜 Download Shortage PDF", shortage_pdf, f"shortage_report_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
 
     # Owner's Transaction Section
     if not filtered_owners_df.empty:
@@ -548,20 +690,29 @@ else:
         st.subheader("Owner’s Credit vs Debit by Owner (₹)")
         owners_chart_data = filtered_owners_df.pivot_table(index="owner_name", columns="type", values="amount", aggfunc="sum", fill_value=0)
         st.bar_chart(owners_chart_data)
+        
+        # PDF Download for Owner’s Transactions
+        owners_pdf = generate_pdf(
+            f"Owner’s Transactions Report{title_suffix}",
+            filtered_owners_df,
+            ["Date", "owner_name", "amount", "mode", "type"],
+            {"amount": filtered_owners_df["amount"].sum()}
+        )
+        st.download_button("📜 Download Owner’s Transactions PDF", owners_pdf, f"owners_transactions_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
 
-    # Downloads
+    # Downloads for CSV
     if not filtered_sales_df.empty:
         sales_csv = filtered_sales_df.to_csv(index=False)
-        st.download_button("📥 Download Sales Data", data=sales_csv, file_name=f"sales_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
+        st.download_button("📥 Download Sales CSV", data=sales_csv, file_name=f"sales_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
     if not filtered_party_df.empty:
         party_csv = filtered_party_df.to_csv(index=False)
-        st.download_button("📥 Download Party Ledger", data=party_csv, file_name=f"party_ledger_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
+        st.download_button("📥 Download Party Ledger CSV", data=party_csv, file_name=f"party_ledger_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
     if not filtered_shortage_df.empty:
         shortage_csv = filtered_shortage_df.to_csv(index=False)
-        st.download_button("📥 Download Employee Shortage", data=shortage_csv, file_name=f"shortage_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
+        st.download_button("📥 Download Employee Shortage CSV", data=shortage_csv, file_name=f"shortage_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
     if not filtered_owners_df.empty:
         owners_csv = filtered_owners_df.to_csv(index=False)
-        st.download_button("📥 Download Owner’s Transactions", data=owners_csv, file_name=f"owners_transactions_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
+        st.download_button("📥 Download Owner’s Transactions CSV", data=owners_csv, file_name=f"owners_transactions_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
 
 # Footer
 st.markdown("<hr><p style='text-align: center; color: #7f8c8d;'>Chhatrapati Petroleum</p>", unsafe_allow_html=True)
