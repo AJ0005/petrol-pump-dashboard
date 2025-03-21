@@ -363,112 +363,120 @@ today = date.today()
 selected_date = st.sidebar.date_input("📅 Select Date for Entry", value=today)
 st.sidebar.write(f"Entering data for: {selected_date}")
 
-st.sidebar.subheader("⛽ Petrol Meter Readings (Liters)")
-petrol_c3_open = st.sidebar.number_input("C3 Opening", min_value=0.0, step=0.1)
-petrol_c3_close = st.sidebar.number_input("C3 Closing", min_value=petrol_c3_open, step=0.1)
-petrol_c4_open = st.sidebar.number_input("C4 Opening", min_value=0.0, step=0.1)
-petrol_c4_close = st.sidebar.number_input("C4 Closing", min_value=petrol_c4_open, step=0.1)
-petrol_a1_open = st.sidebar.number_input("A1 Opening", min_value=0.0, step=0.1)
-petrol_a1_close = st.sidebar.number_input("A1 Closing", min_value=petrol_a1_open, step=0.1)
-petrol_a2_open = st.sidebar.number_input("A2 Opening", min_value=0.0, step=0.1)
-petrol_a2_close = st.sidebar.number_input("A2 Closing", min_value=petrol_a2_open, step=0.1)
+# Tabs for Data Entry Sections
+sales_tab, party_tab, shortage_tab, owner_tab = st.sidebar.tabs(["Sales", "Party Ledger", "Shortage", "Owner’s Transaction"])
 
-st.sidebar.subheader("🚛 HSD Meter Readings (Liters)")
-hsd_c1_open = st.sidebar.number_input("C1 Opening (HSD)", min_value=0.0, step=0.1)
-hsd_c1_close = st.sidebar.number_input("C1 Closing (HSD)", min_value=hsd_c1_open, step=0.1)
-hsd_c2_open = st.sidebar.number_input("C2 Opening (HSD)", min_value=0.0, step=0.1)
-hsd_c2_close = st.sidebar.number_input("C2 Closing (HSD)", min_value=hsd_c2_open, step=0.1)
-hsd_b1_open = st.sidebar.number_input("B1 Opening (HSD)", min_value=0.0, step=0.1)
-hsd_b1_close = st.sidebar.number_input("B1 Closing (HSD)", min_value=hsd_b1_open, step=0.1)
-hsd_b2_open = st.sidebar.number_input("B2 Opening (HSD)", min_value=0.0, step=0.1)
-hsd_b2_close = st.sidebar.number_input("B2 Closing (HSD)", min_value=hsd_b2_open, step=0.1)
+# Sales Tab
+with sales_tab:
+    st.subheader("⛽ Petrol Meter Readings (Liters)")
+    petrol_c3_open = st.number_input("C3 Opening", min_value=0.0, step=0.1, key="sales_c3_open")
+    petrol_c3_close = st.number_input("C3 Closing", min_value=petrol_c3_open, step=0.1, key="sales_c3_close")
+    petrol_c4_open = st.number_input("C4 Opening", min_value=0.0, step=0.1, key="sales_c4_open")
+    petrol_c4_close = st.number_input("C4 Closing", min_value=petrol_c4_open, step=0.1, key="sales_c4_close")
+    petrol_a1_open = st.number_input("A1 Opening", min_value=0.0, step=0.1, key="sales_a1_open")
+    petrol_a1_close = st.number_input("A1 Closing", min_value=petrol_a1_open, step=0.1, key="sales_a1_close")
+    petrol_a2_open = st.number_input("A2 Opening", min_value=0.0, step=0.1, key="sales_a2_open")
+    petrol_a2_close = st.number_input("A2 Closing", min_value=petrol_a2_open, step=0.1, key="sales_a2_close")
 
-st.sidebar.subheader("⚡ XP Meter Readings (Liters)")
-xp_b3_open = st.sidebar.number_input("B3 Opening (XP)", min_value=0.0, step=0.1)
-xp_b3_close = st.sidebar.number_input("B3 Closing (XP)", min_value=xp_b3_open, step=0.1)
-xp_b4_open = st.sidebar.number_input("B4 Opening (XP)", min_value=0.0, step=0.1)
-xp_b4_close = st.sidebar.number_input("B4 Closing (XP)", min_value=xp_b4_open, step=0.1)
+    st.subheader("🚛 HSD Meter Readings (Liters)")
+    hsd_c1_open = st.number_input("C1 Opening (HSD)", min_value=0.0, step=0.1, key="sales_hsd_c1_open")
+    hsd_c1_close = st.number_input("C1 Closing (HSD)", min_value=hsd_c1_open, step=0.1, key="sales_hsd_c1_close")
+    hsd_c2_open = st.number_input("C2 Opening (HSD)", min_value=0.0, step=0.1, key="sales_hsd_c2_open")
+    hsd_c2_close = st.number_input("C2 Closing (HSD)", min_value=hsd_c2_open, step=0.1, key="sales_hsd_c2_close")
+    hsd_b1_open = st.number_input("B1 Opening (HSD)", min_value=0.0, step=0.1, key="sales_hsd_b1_open")
+    hsd_b1_close = st.number_input("B1 Closing (HSD)", min_value=hsd_b1_open, step=0.1, key="sales_hsd_b1_close")
+    hsd_b2_open = st.number_input("B2 Opening (HSD)", min_value=0.0, step=0.1, key="sales_hsd_b2_open")
+    hsd_b2_close = st.number_input("B2 Closing (HSD)", min_value=hsd_b2_open, step=0.1, key="sales_hsd_b2_close")
 
-st.sidebar.subheader("🧪 Testing (Liters)")
-test_b1 = st.sidebar.number_input("Test B1", min_value=0.0, step=0.1, value=0.0)
-test_b2 = st.sidebar.number_input("Test B2", min_value=0.0, step=0.1, value=0.0)
-test_b3 = st.sidebar.number_input("Test B3", min_value=0.0, step=0.1, value=0.0)
-test_b4 = st.sidebar.number_input("Test B4", min_value=0.0, step=0.1, value=0.0)
+    st.subheader("⚡ XP Meter Readings (Liters)")
+    xp_b3_open = st.number_input("B3 Opening (XP)", min_value=0.0, step=0.1, key="sales_xp_b3_open")
+    xp_b3_close = st.number_input("B3 Closing (XP)", min_value=xp_b3_open, step=0.1, key="sales_xp_b3_close")
+    xp_b4_open = st.number_input("B4 Opening (XP)", min_value=0.0, step=0.1, key="sales_xp_b4_open")
+    xp_b4_close = st.number_input("B4 Closing (XP)", min_value=xp_b4_open, step=0.1, key="sales_xp_b4_close")
 
-st.sidebar.subheader("💰 Rates (₹/L)")
-petrol_rate = st.sidebar.number_input("Petrol Rate", min_value=0.0, step=0.01, value=104.62)
-hsd_rate = st.sidebar.number_input("HSD Rate", min_value=0.0, step=0.01, value=91.16)
-xp_rate = st.sidebar.number_input("XP Rate", min_value=0.0, step=0.01, value=111.57)
+    st.subheader("🧪 Testing (Liters)")
+    test_b1 = st.number_input("Test B1", min_value=0.0, step=0.1, value=0.0, key="sales_test_b1")
+    test_b2 = st.number_input("Test B2", min_value=0.0, step=0.1, value=0.0, key="sales_test_b2")
+    test_b3 = st.number_input("Test B3", min_value=0.0, step=0.1, value=0.0, key="sales_test_b3")
+    test_b4 = st.number_input("Test B4", min_value=0.0, step=0.1, value=0.0, key="sales_test_b4")
 
-st.sidebar.subheader("🛢️ Oil Sales (₹)")
-num_oil_products = st.sidebar.number_input("Number of Oil Products", min_value=0, max_value=10, value=0, step=1)
-oil_products = []
-oil_amounts = []
-for i in range(num_oil_products):
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        product_name = st.text_input(f"Oil Product {i+1} Name", key=f"oil_product_{i}")
-    with col2:
-        amount = st.number_input(f"Oil Product {i+1} Amount (₹)", min_value=0.0, step=0.1, key=f"oil_amount_{i}")
-    oil_products.append(product_name)
-    oil_amounts.append(amount)
+    st.subheader("💰 Rates (₹/L)")
+    petrol_rate = st.number_input("Petrol Rate", min_value=0.0, step=0.01, value=104.62, key="sales_petrol_rate")
+    hsd_rate = st.number_input("HSD Rate", min_value=0.0, step=0.01, value=91.16, key="sales_hsd_rate")
+    xp_rate = st.number_input("XP Rate", min_value=0.0, step=0.01, value=111.57, key="sales_xp_rate")
 
-st.sidebar.subheader("💳 Payment Transactions (₹)")
-paytm_amount = st.sidebar.number_input("Paytm Amount", min_value=0.0, step=0.1, value=0.0)
-icici_amount = st.sidebar.number_input("ICICI Amount", min_value=0.0, step=0.1, value=0.0)
-fleet_card_amount = st.sidebar.number_input("Fleet Card Amount", min_value=0.0, step=0.1, value=0.0)
+    st.subheader("🛢️ Oil Sales (₹)")
+    num_oil_products = st.number_input("Number of Oil Products", min_value=0, max_value=10, value=0, step=1, key="sales_num_oil")
+    oil_products = []
+    oil_amounts = []
+    for i in range(num_oil_products):
+        col1, col2 = st.columns(2)
+        with col1:
+            product_name = st.text_input(f"Oil Product {i+1} Name", key=f"sales_oil_product_{i}")
+        with col2:
+            amount = st.number_input(f"Oil Product {i+1} Amount (₹)", min_value=0.0, step=0.1, key=f"sales_oil_amount_{i}")
+        oil_products.append(product_name)
+        oil_amounts.append(amount)
 
-st.sidebar.subheader("🛠️ Pump Expenses (₹)")
-pump_expenses = st.sidebar.number_input("Pump Expenses", min_value=0.0, step=0.1, value=0.0)
-pump_expenses_remark = st.sidebar.text_input("Expenses Remark", value="")
+    st.subheader("💳 Payment Transactions (₹)")
+    paytm_amount = st.number_input("Paytm Amount", min_value=0.0, step=0.1, value=0.0, key="sales_paytm")
+    icici_amount = st.number_input("ICICI Amount", min_value=0.0, step=0.1, value=0.0, key="sales_icici")
+    fleet_card_amount = st.number_input("Fleet Card Amount", min_value=0.0, step=0.1, value=0.0, key="sales_fleet")
 
-if st.sidebar.button("💾 Save Sales"):
-    data_dict = {
-        "petrol_c3_open": petrol_c3_open, "petrol_c3_close": petrol_c3_close,
-        "petrol_c4_open": petrol_c4_open, "petrol_c4_close": petrol_c4_close,
-        "petrol_a1_open": petrol_a1_open, "petrol_a1_close": petrol_a1_close,
-        "petrol_a2_open": petrol_a2_open, "petrol_a2_close": petrol_a2_close,
-        "hsd_c1_open": hsd_c1_open, "hsd_c1_close": hsd_c1_close,
-        "hsd_c2_open": hsd_c2_open, "hsd_c2_close": hsd_c2_close,
-        "hsd_b1_open": hsd_b1_open, "hsd_b1_close": hsd_b1_close,
-        "hsd_b2_open": hsd_b2_open, "hsd_b2_close": hsd_b2_close,
-        "xp_b3_open": xp_b3_open, "xp_b3_close": xp_b3_close,
-        "xp_b4_open": xp_b4_open, "xp_b4_close": xp_b4_close,
-        "test_b1": test_b1, "test_b2": test_b2, "test_b3": test_b3, "test_b4": test_b4,
-        "petrol_rate": petrol_rate, "hsd_rate": hsd_rate, "xp_rate": xp_rate,
-        "oil_products": oil_products, "oil_amounts": oil_amounts,
-        "paytm_amount": paytm_amount, "icici_amount": icici_amount,
-        "fleet_card_amount": fleet_card_amount, "pump_expenses": pump_expenses,
-        "pump_expenses_remark": pump_expenses_remark
-    }
-    save_sales_data(selected_date, data_dict)
+    st.subheader("🛠️ Pump Expenses (₹)")
+    pump_expenses = st.number_input("Pump Expenses", min_value=0.0, step=0.1, value=0.0, key="sales_expenses")
+    pump_expenses_remark = st.text_input("Expenses Remark", value="", key="sales_expenses_remark")
 
-# Party Ledger Entry
-st.sidebar.subheader("📒 Party Ledger")
-party_name = st.sidebar.text_input("Party Name")
-party_credit = st.sidebar.number_input("Credit Amount (₹)", min_value=0.0, step=0.1, value=0.0)
-party_debit = st.sidebar.number_input("Debit Amount (₹)", min_value=0.0, step=0.1, value=0.0)
-party_remark = st.sidebar.text_input("Remark", value="")
-if st.sidebar.button("💾 Save Party Transaction"):
-    save_party_ledger(selected_date, party_name, party_credit, party_debit, party_remark)
+    if st.button("💾 Save Sales", key="save_sales"):
+        data_dict = {
+            "petrol_c3_open": petrol_c3_open, "petrol_c3_close": petrol_c3_close,
+            "petrol_c4_open": petrol_c4_open, "petrol_c4_close": petrol_c4_close,
+            "petrol_a1_open": petrol_a1_open, "petrol_a1_close": petrol_a1_close,
+            "petrol_a2_open": petrol_a2_open, "petrol_a2_close": petrol_a2_close,
+            "hsd_c1_open": hsd_c1_open, "hsd_c1_close": hsd_c1_close,
+            "hsd_c2_open": hsd_c2_open, "hsd_c2_close": hsd_c2_close,
+            "hsd_b1_open": hsd_b1_open, "hsd_b1_close": hsd_b1_close,
+            "hsd_b2_open": hsd_b2_open, "hsd_b2_close": hsd_b2_close,
+            "xp_b3_open": xp_b3_open, "xp_b3_close": xp_b3_close,
+            "xp_b4_open": xp_b4_open, "xp_b4_close": xp_b4_close,
+            "test_b1": test_b1, "test_b2": test_b2, "test_b3": test_b3, "test_b4": test_b4,
+            "petrol_rate": petrol_rate, "hsd_rate": hsd_rate, "xp_rate": xp_rate,
+            "oil_products": oil_products, "oil_amounts": oil_amounts,
+            "paytm_amount": paytm_amount, "icici_amount": icici_amount,
+            "fleet_card_amount": fleet_card_amount, "pump_expenses": pump_expenses,
+            "pump_expenses_remark": pump_expenses_remark
+        }
+        save_sales_data(selected_date, data_dict)
 
-# Employee Shortage Entry
-st.sidebar.subheader("👷 Employee Shortage")
-employee_name = st.sidebar.text_input("Employee Name")
-shortage_amount = st.sidebar.number_input("Shortage Amount (₹)", min_value=0.0, step=0.1, value=0.0)
-if st.sidebar.button("💾 Save Shortage"):
-    save_employee_shortage(selected_date, employee_name, shortage_amount)
+# Party Ledger Tab
+with party_tab:
+    st.subheader("📒 Party Ledger")
+    party_name = st.text_input("Party Name", key="party_name")
+    party_credit = st.number_input("Credit Amount (₹)", min_value=0.0, step=0.1, value=0.0, key="party_credit")
+    party_debit = st.number_input("Debit Amount (₹)", min_value=0.0, step=0.1, value=0.0, key="party_debit")
+    party_remark = st.text_input("Remark", value="", key="party_remark")
+    if st.button("💾 Save Party Transaction", key="save_party"):
+        save_party_ledger(selected_date, party_name, party_credit, party_debit, party_remark)
 
-# Owner's Transaction Entry
-st.sidebar.subheader("👑 Owner’s Transaction")
-owner_name = st.sidebar.text_input("Owner Name")
-owner_amount = st.sidebar.number_input("Amount (₹)", min_value=0.0, step=0.1, value=0.0)
-owner_mode = st.sidebar.selectbox("Mode of Transaction", ["Online", "Cheque", "Cash"])
-owner_type = st.sidebar.selectbox("Type", ["Credit", "Debit"])
-if st.sidebar.button("💾 Save Owner Transaction"):
-    save_owners_transaction(selected_date, owner_name, owner_amount, owner_mode, owner_type)
+# Employee Shortage Tab
+with shortage_tab:
+    st.subheader("👷 Employee Shortage")
+    employee_name = st.text_input("Employee Name", key="shortage_employee")
+    shortage_amount = st.number_input("Shortage Amount (₹)", min_value=0.0, step=0.1, value=0.0, key="shortage_amount")
+    if st.button("💾 Save Shortage", key="save_shortage"):
+        save_employee_shortage(selected_date, employee_name, shortage_amount)
 
-# Delete Section
+# Owner’s Transaction Tab
+with owner_tab:
+    st.subheader("👑 Owner’s Transaction")
+    owner_name = st.text_input("Owner Name", key="owner_name")
+    owner_amount = st.number_input("Amount (₹)", min_value=0.0, step=0.1, value=0.0, key="owner_amount")
+    owner_mode = st.selectbox("Mode of Transaction", ["Online", "Cheque", "Cash"], key="owner_mode")
+    owner_type = st.selectbox("Type", ["Credit", "Debit"], key="owner_type")
+    if st.button("💾 Save Owner Transaction", key="save_owner"):
+        save_owners_transaction(selected_date, owner_name, owner_amount, owner_mode, owner_type)
+
+# Remaining Sidebar Sections (Outside Tabs)
 st.sidebar.subheader("🗑️ Delete Sales Data")
 delete_range = st.sidebar.date_input("📅 Delete Range", value=[today, today], key="delete_range")
 if len(delete_range) == 2:
@@ -483,7 +491,6 @@ if len(delete_range) == 2:
         else:
             st.sidebar.write("Please check 'Confirm Deletion' to proceed.")
 
-# Reset All Data Section
 st.sidebar.subheader("🔄 Reset All Data")
 confirm_reset = st.sidebar.checkbox("Confirm Reset (This will delete all data permanently)", value=False)
 if st.sidebar.button("🔄 Reset All Data", type="primary"):
@@ -492,7 +499,6 @@ if st.sidebar.button("🔄 Reset All Data", type="primary"):
     else:
         st.sidebar.write("Please check 'Confirm Reset' to proceed.")
 
-# Backup and Restore Section
 st.sidebar.subheader("💾 Backup & Restore")
 if st.sidebar.button("📥 Backup Data"):
     backup_file = backup_data()
@@ -503,7 +509,6 @@ uploaded_file = st.sidebar.file_uploader("Upload Backup ZIP", type="zip")
 if uploaded_file and st.sidebar.button("📤 Restore Data"):
     restore_data(uploaded_file)
 
-# Filter Dashboard Data
 st.sidebar.subheader("📅 Filter Dashboard Data (Optional)")
 date_range = st.sidebar.date_input("Select Date Range for Display", value=[selected_date, selected_date], key="filter_range")
 if len(date_range) == 2:
