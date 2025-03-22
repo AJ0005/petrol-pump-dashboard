@@ -32,8 +32,42 @@ st.markdown("""
     }
     .metric-label {font-size: 1rem; color: #666; font-weight: 500;}
     .metric-value {font-size: 1.8rem; font-weight: bold; margin-top: 5px;}
+    .login-container {max-width: 400px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;}
     </style>
 """, unsafe_allow_html=True)
+
+# Hardcoded credentials (for simplicity)
+VALID_CREDENTIALS = {
+    "admin": "password123",
+    "user": "petrol2025"
+}
+
+# Initialize session state for login
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+# Login function
+def check_login(username, password):
+    return username in VALID_CREDENTIALS and VALID_CREDENTIALS[username] == password
+
+# Login form
+def show_login_page():
+    st.markdown("<h1>🔒 Login to Petrol Pump Dashboard</h1>", unsafe_allow_html=True)
+    with st.form(key="login_form", clear_on_submit=True):
+        st.markdown("<div class='login-container'>", unsafe_allow_html=True)
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submit_button = st.form_submit_button(label="Login")
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        if submit_button:
+            if check_login(username, password):
+                st.session_state.authenticated = True
+                st.success(f"Welcome, {username}!")
+                time.sleep(1)  # Brief delay for user feedback
+                st.rerun()  # Refresh to show dashboard
+            else:
+                st.error("Invalid username or password")
 
 # File paths
 SALES_DATA_PATH = "petrol_sales.csv"
@@ -72,8 +106,6 @@ def init_csv():
         pd.DataFrame(columns=["id", "date", "employee_name", "shortage_amount"]).to_csv(EMPLOYEE_SHORTAGE_PATH, index=False)
     if not os.path.exists(OWNERS_TRANSACTION_PATH):
         pd.DataFrame(columns=["id", "date", "owner_name", "amount", "mode", "type"]).to_csv(OWNERS_TRANSACTION_PATH, index=False)
-
-init_csv()
 
 # Load Sales Data
 def load_sales_data():
@@ -354,370 +386,382 @@ def load_and_filter_data(display_start_date, display_end_date):
 
     return filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, f" ({display_start_date} to {display_end_date})"
 
-# Title
-st.markdown("<h1>⛽ Petrol Pump Dashboard</h1>", unsafe_allow_html=True)
+# Main app logic (only shown if authenticated)
+if not st.session_state.authenticated:
+    show_login_page()
+else:
+    init_csv()  # Initialize CSVs only after login
+    
+    # Title
+    st.markdown("<h1>⛽ Petrol Pump Dashboard</h1>", unsafe_allow_html=True)
 
-# Sidebar
-st.sidebar.header("📊 Data Entry")
-today = date.today()
-selected_date = st.sidebar.date_input("📅 Select Date for Entry", value=today)
-st.sidebar.write(f"Entering data for: {selected_date}")
+    # Logout button in sidebar
+    st.sidebar.header("🔑 User Session")
+    if st.sidebar.button("Logout"):
+        st.session_state.authenticated = False
+        st.rerun()
 
-# Tabs for Data Entry Sections
-sales_tab, party_tab, shortage_tab, owner_tab = st.sidebar.tabs(["Sales", "Party Ledger", "Shortage", "Owner’s Transaction"])
+    # Sidebar
+    st.sidebar.header("📊 Data Entry")
+    today = date.today()
+    selected_date = st.sidebar.date_input("📅 Select Date for Entry", value=today)
+    st.sidebar.write(f"Entering data for: {selected_date}")
 
-# Sales Tab
-with sales_tab:
-    st.subheader("⛽ Petrol Meter Readings (Liters)")
-    petrol_c3_open = st.number_input("C3 Opening", min_value=0.0, step=0.1, key="sales_c3_open")
-    petrol_c3_close = st.number_input("C3 Closing", min_value=petrol_c3_open, step=0.1, key="sales_c3_close")
-    petrol_c4_open = st.number_input("C4 Opening", min_value=0.0, step=0.1, key="sales_c4_open")
-    petrol_c4_close = st.number_input("C4 Closing", min_value=petrol_c4_open, step=0.1, key="sales_c4_close")
-    petrol_a1_open = st.number_input("A1 Opening", min_value=0.0, step=0.1, key="sales_a1_open")
-    petrol_a1_close = st.number_input("A1 Closing", min_value=petrol_a1_open, step=0.1, key="sales_a1_close")
-    petrol_a2_open = st.number_input("A2 Opening", min_value=0.0, step=0.1, key="sales_a2_open")
-    petrol_a2_close = st.number_input("A2 Closing", min_value=petrol_a2_open, step=0.1, key="sales_a2_close")
+    # Tabs for Data Entry Sections
+    sales_tab, party_tab, shortage_tab, owner_tab = st.sidebar.tabs(["Sales", "Party Ledger", "Shortage", "Owner’s Transaction"])
 
-    st.subheader("🚛 HSD Meter Readings (Liters)")
-    hsd_c1_open = st.number_input("C1 Opening (HSD)", min_value=0.0, step=0.1, key="sales_hsd_c1_open")
-    hsd_c1_close = st.number_input("C1 Closing (HSD)", min_value=hsd_c1_open, step=0.1, key="sales_hsd_c1_close")
-    hsd_c2_open = st.number_input("C2 Opening (HSD)", min_value=0.0, step=0.1, key="sales_hsd_c2_open")
-    hsd_c2_close = st.number_input("C2 Closing (HSD)", min_value=hsd_c2_open, step=0.1, key="sales_hsd_c2_close")
-    hsd_b1_open = st.number_input("B1 Opening (HSD)", min_value=0.0, step=0.1, key="sales_hsd_b1_open")
-    hsd_b1_close = st.number_input("B1 Closing (HSD)", min_value=hsd_b1_open, step=0.1, key="sales_hsd_b1_close")
-    hsd_b2_open = st.number_input("B2 Opening (HSD)", min_value=0.0, step=0.1, key="sales_hsd_b2_open")
-    hsd_b2_close = st.number_input("B2 Closing (HSD)", min_value=hsd_b2_open, step=0.1, key="sales_hsd_b2_close")
+    # Sales Tab
+    with sales_tab:
+        st.subheader("⛽ Petrol Meter Readings (Liters)")
+        petrol_c3_open = st.number_input("C3 Opening", min_value=0.0, step=0.1, key="sales_c3_open")
+        petrol_c3_close = st.number_input("C3 Closing", min_value=petrol_c3_open, step=0.1, key="sales_c3_close")
+        petrol_c4_open = st.number_input("C4 Opening", min_value=0.0, step=0.1, key="sales_c4_open")
+        petrol_c4_close = st.number_input("C4 Closing", min_value=petrol_c4_open, step=0.1, key="sales_c4_close")
+        petrol_a1_open = st.number_input("A1 Opening", min_value=0.0, step=0.1, key="sales_a1_open")
+        petrol_a1_close = st.number_input("A1 Closing", min_value=petrol_a1_open, step=0.1, key="sales_a1_close")
+        petrol_a2_open = st.number_input("A2 Opening", min_value=0.0, step=0.1, key="sales_a2_open")
+        petrol_a2_close = st.number_input("A2 Closing", min_value=petrol_a2_open, step=0.1, key="sales_a2_close")
 
-    st.subheader("⚡ XP Meter Readings (Liters)")
-    xp_b3_open = st.number_input("B3 Opening (XP)", min_value=0.0, step=0.1, key="sales_xp_b3_open")
-    xp_b3_close = st.number_input("B3 Closing (XP)", min_value=xp_b3_open, step=0.1, key="sales_xp_b3_close")
-    xp_b4_open = st.number_input("B4 Opening (XP)", min_value=0.0, step=0.1, key="sales_xp_b4_open")
-    xp_b4_close = st.number_input("B4 Closing (XP)", min_value=xp_b4_open, step=0.1, key="sales_xp_b4_close")
+        st.subheader("🚛 HSD Meter Readings (Liters)")
+        hsd_c1_open = st.number_input("C1 Opening (HSD)", min_value=0.0, step=0.1, key="sales_hsd_c1_open")
+        hsd_c1_close = st.number_input("C1 Closing (HSD)", min_value=hsd_c1_open, step=0.1, key="sales_hsd_c1_close")
+        hsd_c2_open = st.number_input("C2 Opening (HSD)", min_value=0.0, step=0.1, key="sales_hsd_c2_open")
+        hsd_c2_close = st.number_input("C2 Closing (HSD)", min_value=hsd_c2_open, step=0.1, key="sales_hsd_c2_close")
+        hsd_b1_open = st.number_input("B1 Opening (HSD)", min_value=0.0, step=0.1, key="sales_hsd_b1_open")
+        hsd_b1_close = st.number_input("B1 Closing (HSD)", min_value=hsd_b1_open, step=0.1, key="sales_hsd_b1_close")
+        hsd_b2_open = st.number_input("B2 Opening (HSD)", min_value=0.0, step=0.1, key="sales_hsd_b2_open")
+        hsd_b2_close = st.number_input("B2 Closing (HSD)", min_value=hsd_b2_open, step=0.1, key="sales_hsd_b2_close")
 
-    st.subheader("🧪 Testing (Liters)")
-    test_b1 = st.number_input("Test B1", min_value=0.0, step=0.1, value=0.0, key="sales_test_b1")
-    test_b2 = st.number_input("Test B2", min_value=0.0, step=0.1, value=0.0, key="sales_test_b2")
-    test_b3 = st.number_input("Test B3", min_value=0.0, step=0.1, value=0.0, key="sales_test_b3")
-    test_b4 = st.number_input("Test B4", min_value=0.0, step=0.1, value=0.0, key="sales_test_b4")
+        st.subheader("⚡ XP Meter Readings (Liters)")
+        xp_b3_open = st.number_input("B3 Opening (XP)", min_value=0.0, step=0.1, key="sales_xp_b3_open")
+        xp_b3_close = st.number_input("B3 Closing (XP)", min_value=xp_b3_open, step=0.1, key="sales_xp_b3_close")
+        xp_b4_open = st.number_input("B4 Opening (XP)", min_value=0.0, step=0.1, key="sales_xp_b4_open")
+        xp_b4_close = st.number_input("B4 Closing (XP)", min_value=xp_b4_open, step=0.1, key="sales_xp_b4_close")
 
-    st.subheader("💰 Rates (₹/L)")
-    petrol_rate = st.number_input("Petrol Rate", min_value=0.0, step=0.01, value=104.62, key="sales_petrol_rate")
-    hsd_rate = st.number_input("HSD Rate", min_value=0.0, step=0.01, value=91.16, key="sales_hsd_rate")
-    xp_rate = st.number_input("XP Rate", min_value=0.0, step=0.01, value=111.57, key="sales_xp_rate")
+        st.subheader("🧪 Testing (Liters)")
+        test_b1 = st.number_input("Test B1", min_value=0.0, step=0.1, value=0.0, key="sales_test_b1")
+        test_b2 = st.number_input("Test B2", min_value=0.0, step=0.1, value=0.0, key="sales_test_b2")
+        test_b3 = st.number_input("Test B3", min_value=0.0, step=0.1, value=0.0, key="sales_test_b3")
+        test_b4 = st.number_input("Test B4", min_value=0.0, step=0.1, value=0.0, key="sales_test_b4")
 
-    st.subheader("🛢️ Oil Sales (₹)")
-    num_oil_products = st.number_input("Number of Oil Products", min_value=0, max_value=10, value=0, step=1, key="sales_num_oil")
-    oil_products = []
-    oil_amounts = []
-    for i in range(num_oil_products):
-        col1, col2 = st.columns(2)
-        with col1:
-            product_name = st.text_input(f"Oil Product {i+1} Name", key=f"sales_oil_product_{i}")
-        with col2:
-            amount = st.number_input(f"Oil Product {i+1} Amount (₹)", min_value=0.0, step=0.1, key=f"sales_oil_amount_{i}")
-        oil_products.append(product_name)
-        oil_amounts.append(amount)
+        st.subheader("💰 Rates (₹/L)")
+        petrol_rate = st.number_input("Petrol Rate", min_value=0.0, step=0.01, value=104.62, key="sales_petrol_rate")
+        hsd_rate = st.number_input("HSD Rate", min_value=0.0, step=0.01, value=91.16, key="sales_hsd_rate")
+        xp_rate = st.number_input("XP Rate", min_value=0.0, step=0.01, value=111.57, key="sales_xp_rate")
 
-    st.subheader("💳 Payment Transactions (₹)")
-    paytm_amount = st.number_input("Paytm Amount", min_value=0.0, step=0.1, value=0.0, key="sales_paytm")
-    icici_amount = st.number_input("ICICI Amount", min_value=0.0, step=0.1, value=0.0, key="sales_icici")
-    fleet_card_amount = st.number_input("Fleet Card Amount", min_value=0.0, step=0.1, value=0.0, key="sales_fleet")
+        st.subheader("🛢️ Oil Sales (₹)")
+        num_oil_products = st.number_input("Number of Oil Products", min_value=0, max_value=10, value=0, step=1, key="sales_num_oil")
+        oil_products = []
+        oil_amounts = []
+        for i in range(num_oil_products):
+            col1, col2 = st.columns(2)
+            with col1:
+                product_name = st.text_input(f"Oil Product {i+1} Name", key=f"sales_oil_product_{i}")
+            with col2:
+                amount = st.number_input(f"Oil Product {i+1} Amount (₹)", min_value=0.0, step=0.1, key=f"sales_oil_amount_{i}")
+            oil_products.append(product_name)
+            oil_amounts.append(amount)
 
-    st.subheader("🛠️ Pump Expenses (₹)")
-    pump_expenses = st.number_input("Pump Expenses", min_value=0.0, step=0.1, value=0.0, key="sales_expenses")
-    pump_expenses_remark = st.text_input("Expenses Remark", value="", key="sales_expenses_remark")
+        st.subheader("💳 Payment Transactions (₹)")
+        paytm_amount = st.number_input("Paytm Amount", min_value=0.0, step=0.1, value=0.0, key="sales_paytm")
+        icici_amount = st.number_input("ICICI Amount", min_value=0.0, step=0.1, value=0.0, key="sales_icici")
+        fleet_card_amount = st.number_input("Fleet Card Amount", min_value=0.0, step=0.1, value=0.0, key="sales_fleet")
 
-    if st.button("💾 Save Sales", key="save_sales"):
-        data_dict = {
-            "petrol_c3_open": petrol_c3_open, "petrol_c3_close": petrol_c3_close,
-            "petrol_c4_open": petrol_c4_open, "petrol_c4_close": petrol_c4_close,
-            "petrol_a1_open": petrol_a1_open, "petrol_a1_close": petrol_a1_close,
-            "petrol_a2_open": petrol_a2_open, "petrol_a2_close": petrol_a2_close,
-            "hsd_c1_open": hsd_c1_open, "hsd_c1_close": hsd_c1_close,
-            "hsd_c2_open": hsd_c2_open, "hsd_c2_close": hsd_c2_close,
-            "hsd_b1_open": hsd_b1_open, "hsd_b1_close": hsd_b1_close,
-            "hsd_b2_open": hsd_b2_open, "hsd_b2_close": hsd_b2_close,
-            "xp_b3_open": xp_b3_open, "xp_b3_close": xp_b3_close,
-            "xp_b4_open": xp_b4_open, "xp_b4_close": xp_b4_close,
-            "test_b1": test_b1, "test_b2": test_b2, "test_b3": test_b3, "test_b4": test_b4,
-            "petrol_rate": petrol_rate, "hsd_rate": hsd_rate, "xp_rate": xp_rate,
-            "oil_products": oil_products, "oil_amounts": oil_amounts,
-            "paytm_amount": paytm_amount, "icici_amount": icici_amount,
-            "fleet_card_amount": fleet_card_amount, "pump_expenses": pump_expenses,
-            "pump_expenses_remark": pump_expenses_remark
-        }
-        save_sales_data(selected_date, data_dict)
+        st.subheader("🛠️ Pump Expenses (₹)")
+        pump_expenses = st.number_input("Pump Expenses", min_value=0.0, step=0.1, value=0.0, key="sales_expenses")
+        pump_expenses_remark = st.text_input("Expenses Remark", value="", key="sales_expenses_remark")
 
-# Party Ledger Tab
-with party_tab:
-    st.subheader("📒 Party Ledger")
-    party_name = st.text_input("Party Name", key="party_name")
-    party_credit = st.number_input("Credit Amount (₹)", min_value=0.0, step=0.1, value=0.0, key="party_credit")
-    party_debit = st.number_input("Debit Amount (₹)", min_value=0.0, step=0.1, value=0.0, key="party_debit")
-    party_remark = st.text_input("Remark", value="", key="party_remark")
-    if st.button("💾 Save Party Transaction", key="save_party"):
-        save_party_ledger(selected_date, party_name, party_credit, party_debit, party_remark)
+        if st.button("💾 Save Sales", key="save_sales"):
+            data_dict = {
+                "petrol_c3_open": petrol_c3_open, "petrol_c3_close": petrol_c3_close,
+                "petrol_c4_open": petrol_c4_open, "petrol_c4_close": petrol_c4_close,
+                "petrol_a1_open": petrol_a1_open, "petrol_a1_close": petrol_a1_close,
+                "petrol_a2_open": petrol_a2_open, "petrol_a2_close": petrol_a2_close,
+                "hsd_c1_open": hsd_c1_open, "hsd_c1_close": hsd_c1_close,
+                "hsd_c2_open": hsd_c2_open, "hsd_c2_close": hsd_c2_close,
+                "hsd_b1_open": hsd_b1_open, "hsd_b1_close": hsd_b1_close,
+                "hsd_b2_open": hsd_b2_open, "hsd_b2_close": hsd_b2_close,
+                "xp_b3_open": xp_b3_open, "xp_b3_close": xp_b3_close,
+                "xp_b4_open": xp_b4_open, "xp_b4_close": xp_b4_close,
+                "test_b1": test_b1, "test_b2": test_b2, "test_b3": test_b3, "test_b4": test_b4,
+                "petrol_rate": petrol_rate, "hsd_rate": hsd_rate, "xp_rate": xp_rate,
+                "oil_products": oil_products, "oil_amounts": oil_amounts,
+                "paytm_amount": paytm_amount, "icici_amount": icici_amount,
+                "fleet_card_amount": fleet_card_amount, "pump_expenses": pump_expenses,
+                "pump_expenses_remark": pump_expenses_remark
+            }
+            save_sales_data(selected_date, data_dict)
 
-# Employee Shortage Tab
-with shortage_tab:
-    st.subheader("👷 Employee Shortage")
-    employee_name = st.text_input("Employee Name", key="shortage_employee")
-    shortage_amount = st.number_input("Shortage Amount (₹)", min_value=0.0, step=0.1, value=0.0, key="shortage_amount")
-    if st.button("💾 Save Shortage", key="save_shortage"):
-        save_employee_shortage(selected_date, employee_name, shortage_amount)
+    # Party Ledger Tab
+    with party_tab:
+        st.subheader("📒 Party Ledger")
+        party_name = st.text_input("Party Name", key="party_name")
+        party_credit = st.number_input("Credit Amount (₹)", min_value=0.0, step=0.1, value=0.0, key="party_credit")
+        party_debit = st.number_input("Debit Amount (₹)", min_value=0.0, step=0.1, value=0.0, key="party_debit")
+        party_remark = st.text_input("Remark", value="", key="party_remark")
+        if st.button("💾 Save Party Transaction", key="save_party"):
+            save_party_ledger(selected_date, party_name, party_credit, party_debit, party_remark)
 
-# Owner’s Transaction Tab
-with owner_tab:
-    st.subheader("👑 Owner’s Transaction")
-    owner_name = st.text_input("Owner Name", key="owner_name")
-    owner_amount = st.number_input("Amount (₹)", min_value=0.0, step=0.1, value=0.0, key="owner_amount")
-    owner_mode = st.selectbox("Mode of Transaction", ["Online", "Cheque", "Cash"], key="owner_mode")
-    owner_type = st.selectbox("Type", ["Credit", "Debit"], key="owner_type")
-    if st.button("💾 Save Owner Transaction", key="save_owner"):
-        save_owners_transaction(selected_date, owner_name, owner_amount, owner_mode, owner_type)
+    # Employee Shortage Tab
+    with shortage_tab:
+        st.subheader("👷 Employee Shortage")
+        employee_name = st.text_input("Employee Name", key="shortage_employee")
+        shortage_amount = st.number_input("Shortage Amount (₹)", min_value=0.0, step=0.1, value=0.0, key="shortage_amount")
+        if st.button("💾 Save Shortage", key="save_shortage"):
+            save_employee_shortage(selected_date, employee_name, shortage_amount)
 
-# Remaining Sidebar Sections (Outside Tabs)
-st.sidebar.subheader("🗑️ Delete Sales Data")
-delete_range = st.sidebar.date_input("📅 Delete Range", value=[today, today], key="delete_range")
-if len(delete_range) == 2:
-    start_date, end_date = delete_range
-    confirm_delete = st.sidebar.checkbox("Confirm Deletion", value=False)
-    if st.sidebar.button("🗑️ Delete", type="primary"):
-        if confirm_delete:
-            deleted_rows = delete_sales_data(start_date, end_date)
-            st.sidebar.success(f"Deleted {deleted_rows} rows!")
-            time.sleep(0.5)
-            st.rerun()
+    # Owner’s Transaction Tab
+    with owner_tab:
+        st.subheader("👑 Owner’s Transaction")
+        owner_name = st.text_input("Owner Name", key="owner_name")
+        owner_amount = st.number_input("Amount (₹)", min_value=0.0, step=0.1, value=0.0, key="owner_amount")
+        owner_mode = st.selectbox("Mode of Transaction", ["Online", "Cheque", "Cash"], key="owner_mode")
+        owner_type = st.selectbox("Type", ["Credit", "Debit"], key="owner_type")
+        if st.button("💾 Save Owner Transaction", key="save_owner"):
+            save_owners_transaction(selected_date, owner_name, owner_amount, owner_mode, owner_type)
+
+    # Remaining Sidebar Sections (Outside Tabs)
+    st.sidebar.subheader("🗑️ Delete Sales Data")
+    delete_range = st.sidebar.date_input("📅 Delete Range", value=[today, today], key="delete_range")
+    if len(delete_range) == 2:
+        start_date, end_date = delete_range
+        confirm_delete = st.sidebar.checkbox("Confirm Deletion", value=False)
+        if st.sidebar.button("🗑️ Delete", type="primary"):
+            if confirm_delete:
+                deleted_rows = delete_sales_data(start_date, end_date)
+                st.sidebar.success(f"Deleted {deleted_rows} rows!")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.sidebar.write("Please check 'Confirm Deletion' to proceed.")
+
+    st.sidebar.subheader("🔄 Reset All Data")
+    confirm_reset = st.sidebar.checkbox("Confirm Reset (This will delete all data permanently)", value=False)
+    if st.sidebar.button("🔄 Reset All Data", type="primary"):
+        if confirm_reset:
+            reset_all_data()
         else:
-            st.sidebar.write("Please check 'Confirm Deletion' to proceed.")
+            st.sidebar.write("Please check 'Confirm Reset' to proceed.")
 
-st.sidebar.subheader("🔄 Reset All Data")
-confirm_reset = st.sidebar.checkbox("Confirm Reset (This will delete all data permanently)", value=False)
-if st.sidebar.button("🔄 Reset All Data", type="primary"):
-    if confirm_reset:
-        reset_all_data()
+    st.sidebar.subheader("💾 Backup & Restore")
+    if st.sidebar.button("📥 Backup Data"):
+        backup_file = backup_data()
+        with open(backup_file, "rb") as f:
+            st.sidebar.download_button("Download Backup", f, file_name=backup_file, mime="application/zip")
+
+    uploaded_file = st.sidebar.file_uploader("Upload Backup ZIP", type="zip")
+    if uploaded_file and st.sidebar.button("📤 Restore Data"):
+        restore_data(uploaded_file)
+
+    st.sidebar.subheader("📅 Filter Dashboard Data (Optional)")
+    date_range = st.sidebar.date_input("Select Date Range for Display", value=[selected_date, selected_date], key="filter_range")
+    if len(date_range) == 2:
+        display_start_date, display_end_date = date_range
     else:
-        st.sidebar.write("Please check 'Confirm Reset' to proceed.")
+        display_start_date, display_end_date = selected_date, selected_date
 
-st.sidebar.subheader("💾 Backup & Restore")
-if st.sidebar.button("📥 Backup Data"):
-    backup_file = backup_data()
-    with open(backup_file, "rb") as f:
-        st.sidebar.download_button("Download Backup", f, file_name=backup_file, mime="application/zip")
+    # Load and filter data
+    filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, title_suffix = load_and_filter_data(display_start_date, display_end_date)
 
-uploaded_file = st.sidebar.file_uploader("Upload Backup ZIP", type="zip")
-if uploaded_file and st.sidebar.button("📤 Restore Data"):
-    restore_data(uploaded_file)
+    # Display Dashboard
+    if filtered_sales_df.empty and filtered_party_df.empty and filtered_shortage_df.empty and filtered_owners_df.empty:
+        st.warning(f"No data available for the selected range{title_suffix}.")
+    else:
+        if not filtered_sales_df.empty:
+            # Sales Metrics
+            st.markdown(f"<h2>📈 Key Metrics{title_suffix}</h2>", unsafe_allow_html=True)
+            col1, col2, col3, col4, col5 = st.columns(5)
+            with col1:
+                petrol_sales_l = filtered_sales_df[["petrol_c3_sales", "petrol_c4_sales", "petrol_a1_sales", "petrol_a2_sales"]].sum().sum()
+                petrol_sales_r = filtered_sales_df["petrol_amount"].sum()
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>⛽ Petrol Sales</span><br><span class='metric-value' style='color: #e74c3c;'>{petrol_sales_l:.2f} L<br>₹{petrol_sales_r:.2f}</span></div>", unsafe_allow_html=True)
+            with col2:
+                hsd_sales_l = filtered_sales_df[["hsd_c1_sales", "hsd_c2_sales", "hsd_b1_sales", "hsd_b2_sales"]].sum().sum()
+                hsd_sales_r = filtered_sales_df["hsd_amount"].sum()
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>🚛 Diesel Sales</span><br><span class='metric-value' style='color: #e67e22;'>{hsd_sales_l:.2f} L<br>₹{hsd_sales_r:.2f}</span></div>", unsafe_allow_html=True)
+            with col3:
+                xp_sales_l = filtered_sales_df[["xp_b3_sales", "xp_b4_sales"]].sum().sum()
+                xp_sales_r = filtered_sales_df["xp_amount"].sum()
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>⚡ XP Sales</span><br><span class='metric-value' style='color: #8e44ad;'>{xp_sales_l:.2f} L<br>₹{xp_sales_r:.2f}</span></div>", unsafe_allow_html=True)
+            with col4:
+                oil_sales_r = filtered_sales_df["total_oil_amount"].sum()
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>🛢️ Oil Sales</span><br><span class='metric-value' style='color: #16a085;'>₹{oil_sales_r:.2f}</span></div>", unsafe_allow_html=True)
+            with col5:
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>💵 Total Sales (₹)</span><br><span class='metric-value' style='color: #2980b9;'>₹{filtered_sales_df['total_sales_amount'].sum():.2f}</span></div>", unsafe_allow_html=True)
 
-st.sidebar.subheader("📅 Filter Dashboard Data (Optional)")
-date_range = st.sidebar.date_input("Select Date Range for Display", value=[selected_date, selected_date], key="filter_range")
-if len(date_range) == 2:
-    display_start_date, display_end_date = date_range
-else:
-    display_start_date, display_end_date = selected_date, selected_date
+            # Cash Flow Metrics
+            st.markdown(f"<h2>💰 Cash Flow{title_suffix}</h2>", unsafe_allow_html=True)
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                total_payments = filtered_sales_df[["paytm_amount", "icici_amount", "fleet_card_amount"]].sum().sum()
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>💳 Total Payments Received (₹)</span><br><span class='metric-value' style='color: #27ae60;'>{total_payments:.2f}</span></div>", unsafe_allow_html=True)
+            with col2:
+                total_expenses = filtered_sales_df["pump_expenses"].sum()
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>🛠️ Pump Expenses (₹)</span><br><span class='metric-value' style='color: #e67e22;'>{total_expenses:.2f}</span></div>", unsafe_allow_html=True)
+            with col3:
+                total_shortage = filtered_shortage_df["shortage_amount"].sum() if not filtered_shortage_df.empty else 0.0
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>👷 Total Shortage (₹)</span><br><span class='metric-value' style='color: #e74c3c;'>{total_shortage:.2f}</span></div>", unsafe_allow_html=True)
+            with col4:
+                net_sales = filtered_sales_df["credit_balance"].sum()
+                party_net_balance = filtered_party_df["credit_amount"].sum() - filtered_party_df["debit_amount"].sum()
+                adjusted_net_sales = net_sales + party_net_balance - total_shortage
+                color = "#c0392b" if adjusted_net_sales > 0 else "#27ae60"
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>📊 Net Sales (₹)</span><br><span class='metric-value' style='color: {color};'>{adjusted_net_sales:.2f}</span></div>", unsafe_allow_html=True)
 
-# Load and filter data
-filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, title_suffix = load_and_filter_data(display_start_date, display_end_date)
+            # Visualizations
+            st.markdown(f"<h2>📊 Visualizations{title_suffix}</h2>", unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Fuel Sales by Type (Liters)")
+                sales_data = pd.DataFrame({
+                    "Fuel Type": ["Petrol", "Diesel", "XP"],
+                    "Sales (L)": [petrol_sales_l, hsd_sales_l, xp_sales_l]
+                })
+                st.bar_chart(sales_data.set_index("Fuel Type"))
+            with col2:
+                st.subheader("Sales Breakdown (₹)")
+                payment_data = pd.DataFrame({
+                    "Type": ["Petrol", "Diesel", "XP", "Oil", "Expenses"],
+                    "Amount (₹)": [
+                        petrol_sales_r,
+                        hsd_sales_r,
+                        xp_sales_r,
+                        oil_sales_r,
+                        total_expenses
+                    ]
+                })
+                st.bar_chart(payment_data.set_index("Type"))
 
-# Display Dashboard
-if filtered_sales_df.empty and filtered_party_df.empty and filtered_shortage_df.empty and filtered_owners_df.empty:
-    st.warning(f"No data available for the selected range{title_suffix}.")
-else:
-    if not filtered_sales_df.empty:
-        # Sales Metrics
-        st.markdown(f"<h2>📈 Key Metrics{title_suffix}</h2>", unsafe_allow_html=True)
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            petrol_sales_l = filtered_sales_df[["petrol_c3_sales", "petrol_c4_sales", "petrol_a1_sales", "petrol_a2_sales"]].sum().sum()
-            petrol_sales_r = filtered_sales_df["petrol_amount"].sum()
-            st.markdown(f"<div class='metric-box'><span class='metric-label'>⛽ Petrol Sales</span><br><span class='metric-value' style='color: #e74c3c;'>{petrol_sales_l:.2f} L<br>₹{petrol_sales_r:.2f}</span></div>", unsafe_allow_html=True)
-        with col2:
-            hsd_sales_l = filtered_sales_df[["hsd_c1_sales", "hsd_c2_sales", "hsd_b1_sales", "hsd_b2_sales"]].sum().sum()
-            hsd_sales_r = filtered_sales_df["hsd_amount"].sum()
-            st.markdown(f"<div class='metric-box'><span class='metric-label'>🚛 Diesel Sales</span><br><span class='metric-value' style='color: #e67e22;'>{hsd_sales_l:.2f} L<br>₹{hsd_sales_r:.2f}</span></div>", unsafe_allow_html=True)
-        with col3:
-            xp_sales_l = filtered_sales_df[["xp_b3_sales", "xp_b4_sales"]].sum().sum()
-            xp_sales_r = filtered_sales_df["xp_amount"].sum()
-            st.markdown(f"<div class='metric-box'><span class='metric-label'>⚡ XP Sales</span><br><span class='metric-value' style='color: #8e44ad;'>{xp_sales_l:.2f} L<br>₹{xp_sales_r:.2f}</span></div>", unsafe_allow_html=True)
-        with col4:
-            oil_sales_r = filtered_sales_df["total_oil_amount"].sum()
-            st.markdown(f"<div class='metric-box'><span class='metric-label'>🛢️ Oil Sales</span><br><span class='metric-value' style='color: #16a085;'>₹{oil_sales_r:.2f}</span></div>", unsafe_allow_html=True)
-        with col5:
-            st.markdown(f"<div class='metric-box'><span class='metric-label'>💵 Total Sales (₹)</span><br><span class='metric-value' style='color: #2980b9;'>₹{filtered_sales_df['total_sales_amount'].sum():.2f}</span></div>", unsafe_allow_html=True)
+            # Sales Data Table
+            st.subheader("📋 Sales Data")
+            display_sales_df = filtered_sales_df[[
+                "Date", "petrol_c3_sales", "petrol_c4_sales", "petrol_a1_sales", "petrol_a2_sales",
+                "hsd_c1_sales", "hsd_c2_sales", "hsd_b1_sales", "hsd_b2_sales",
+                "xp_b3_sales", "xp_b4_sales", "test_b1", "test_b2", "test_b3", "test_b4",
+                "petrol_amount", "hsd_amount", "xp_amount", "oil_products", "oil_amounts", "total_oil_amount",
+                "gross_sales_amount", "total_sales_amount",
+                "paytm_amount", "icici_amount", "fleet_card_amount", "pump_expenses", "pump_expenses_remark",
+                "cash_in", "cash_out", "net_cash", "credit_balance"
+            ]]
+            st.dataframe(display_sales_df)
+            
+            # PDF Download for Sales
+            sales_pdf = generate_pdf(
+                f"Sales Report{title_suffix}",
+                display_sales_df,
+                ["Date", "petrol_amount", "hsd_amount", "xp_amount", "total_oil_amount", "total_sales_amount"],
+                {"total_sales_amount": filtered_sales_df["total_sales_amount"].sum()}
+            )
+            st.download_button("📜 Download Sales PDF", sales_pdf, f"sales_report_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
 
-        # Cash Flow Metrics
-        st.markdown(f"<h2>💰 Cash Flow{title_suffix}</h2>", unsafe_allow_html=True)
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            total_payments = filtered_sales_df[["paytm_amount", "icici_amount", "fleet_card_amount"]].sum().sum()
-            st.markdown(f"<div class='metric-box'><span class='metric-label'>💳 Total Payments Received (₹)</span><br><span class='metric-value' style='color: #27ae60;'>{total_payments:.2f}</span></div>", unsafe_allow_html=True)
-        with col2:
-            total_expenses = filtered_sales_df["pump_expenses"].sum()
-            st.markdown(f"<div class='metric-box'><span class='metric-label'>🛠️ Pump Expenses (₹)</span><br><span class='metric-value' style='color: #e67e22;'>{total_expenses:.2f}</span></div>", unsafe_allow_html=True)
-        with col3:
-            total_shortage = filtered_shortage_df["shortage_amount"].sum() if not filtered_shortage_df.empty else 0.0
-            st.markdown(f"<div class='metric-box'><span class='metric-label'>👷 Total Shortage (₹)</span><br><span class='metric-value' style='color: #e74c3c;'>{total_shortage:.2f}</span></div>", unsafe_allow_html=True)
-        with col4:
-            net_sales = filtered_sales_df["credit_balance"].sum()
-            party_net_balance = filtered_party_df["credit_amount"].sum() - filtered_party_df["debit_amount"].sum()
-            adjusted_net_sales = net_sales + party_net_balance - total_shortage
-            color = "#c0392b" if adjusted_net_sales > 0 else "#27ae60"
-            st.markdown(f"<div class='metric-box'><span class='metric-label'>📊 Net Sales (₹)</span><br><span class='metric-value' style='color: {color};'>{adjusted_net_sales:.2f}</span></div>", unsafe_allow_html=True)
+        # Party Ledger Section
+        if not filtered_party_df.empty:
+            st.markdown(f"<h2>📒 Party Ledger{title_suffix}</h2>", unsafe_allow_html=True)
+            party_summary = filtered_party_df.groupby("party_name").agg({
+                "credit_amount": "sum",
+                "debit_amount": "sum"
+            }).reset_index()
+            party_summary["Net Balance"] = party_summary["credit_amount"] - party_summary["debit_amount"]
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                total_credit = party_summary["credit_amount"].sum()
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>📈 Total Credit (₹)</span><br><span class='metric-value' style='color: #27ae60;'>{total_credit:.2f}</span></div>", unsafe_allow_html=True)
+            with col2:
+                total_debit = party_summary["debit_amount"].sum()
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>📉 Total Debit (₹)</span><br><span class='metric-value' style='color: #e74c3c;'>{total_debit:.2f}</span></div>", unsafe_allow_html=True)
 
-        # Visualizations
-        st.markdown(f"<h2>📊 Visualizations{title_suffix}</h2>", unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Fuel Sales by Type (Liters)")
-            sales_data = pd.DataFrame({
-                "Fuel Type": ["Petrol", "Diesel", "XP"],
-                "Sales (L)": [petrol_sales_l, hsd_sales_l, xp_sales_l]
-            })
-            st.bar_chart(sales_data.set_index("Fuel Type"))
-        with col2:
-            st.subheader("Sales Breakdown (₹)")
-            payment_data = pd.DataFrame({
-                "Type": ["Petrol", "Diesel", "XP", "Oil", "Expenses"],
-                "Amount (₹)": [
-                    petrol_sales_r,
-                    hsd_sales_r,
-                    xp_sales_r,
-                    oil_sales_r,
-                    total_expenses
-                ]
-            })
-            st.bar_chart(payment_data.set_index("Type"))
+            st.subheader("Party Balances Summary")
+            st.dataframe(party_summary)
 
-        # Sales Data Table
-        st.subheader("📋 Sales Data")
-        display_sales_df = filtered_sales_df[[
-            "Date", "petrol_c3_sales", "petrol_c4_sales", "petrol_a1_sales", "petrol_a2_sales",
-            "hsd_c1_sales", "hsd_c2_sales", "hsd_b1_sales", "hsd_b2_sales",
-            "xp_b3_sales", "xp_b4_sales", "test_b1", "test_b2", "test_b3", "test_b4",
-            "petrol_amount", "hsd_amount", "xp_amount", "oil_products", "oil_amounts", "total_oil_amount",
-            "gross_sales_amount", "total_sales_amount",
-            "paytm_amount", "icici_amount", "fleet_card_amount", "pump_expenses", "pump_expenses_remark",
-            "cash_in", "cash_out", "net_cash", "credit_balance"
-        ]]
-        st.dataframe(display_sales_df)
-        
-        # PDF Download for Sales
-        sales_pdf = generate_pdf(
-            f"Sales Report{title_suffix}",
-            display_sales_df,
-            ["Date", "petrol_amount", "hsd_amount", "xp_amount", "total_oil_amount", "total_sales_amount"],
-            {"total_sales_amount": filtered_sales_df["total_sales_amount"].sum()}
-        )
-        st.download_button("📜 Download Sales PDF", sales_pdf, f"sales_report_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
+            st.subheader("Party Net Balance (₹)")
+            party_chart_data = party_summary[["party_name", "Net Balance"]].set_index("party_name")
+            st.bar_chart(party_chart_data)
 
-    # Party Ledger Section
-    if not filtered_party_df.empty:
-        st.markdown(f"<h2>📒 Party Ledger{title_suffix}</h2>", unsafe_allow_html=True)
-        party_summary = filtered_party_df.groupby("party_name").agg({
-            "credit_amount": "sum",
-            "debit_amount": "sum"
-        }).reset_index()
-        party_summary["Net Balance"] = party_summary["credit_amount"] - party_summary["debit_amount"]
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            total_credit = party_summary["credit_amount"].sum()
-            st.markdown(f"<div class='metric-box'><span class='metric-label'>📈 Total Credit (₹)</span><br><span class='metric-value' style='color: #27ae60;'>{total_credit:.2f}</span></div>", unsafe_allow_html=True)
-        with col2:
-            total_debit = party_summary["debit_amount"].sum()
-            st.markdown(f"<div class='metric-box'><span class='metric-label'>📉 Total Debit (₹)</span><br><span class='metric-value' style='color: #e74c3c;'>{total_debit:.2f}</span></div>", unsafe_allow_html=True)
+            # Detailed Party Ledger
+            st.subheader("Detailed Party Ledger")
+            for party in party_summary["party_name"].unique():
+                with st.expander(f"Ledger for {party}"):
+                    party_transactions = filtered_party_df[filtered_party_df["party_name"] == party][["Date", "credit_amount", "debit_amount", "remark"]]
+                    st.dataframe(party_transactions)
+                    net_balance = party_summary[party_summary["party_name"] == party]["Net Balance"].values[0]
+                    color = "#27ae60" if net_balance >= 0 else "#e74c3c"
+                    st.markdown(f"<p style='font-weight: bold; color: {color};'>Net Balance: ₹{net_balance:.2f}</p>", unsafe_allow_html=True)
+                    
+                    # PDF Download for Party
+                    party_pdf = generate_pdf(
+                        f"Party Ledger - {party}{title_suffix}",
+                        party_transactions,
+                        ["Date", "credit_amount", "debit_amount", "remark"],
+                        {"credit_amount": party_transactions["credit_amount"].sum(), "debit_amount": party_transactions["debit_amount"].sum()}
+                    )
+                    st.download_button(f"📜 Download {party} Ledger PDF", party_pdf, f"party_ledger_{party}_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
 
-        st.subheader("Party Balances Summary")
-        st.dataframe(party_summary)
+        # Employee Shortage Section
+        if not filtered_shortage_df.empty:
+            st.markdown(f"<h2>👷 Employee Shortage{title_suffix}</h2>", unsafe_allow_html=True)
+            shortage_summary = filtered_shortage_df.groupby("employee_name").agg({
+                "shortage_amount": "sum"
+            }).reset_index()
+            
+            st.subheader("Employee Shortages")
+            st.dataframe(shortage_summary)
 
-        st.subheader("Party Net Balance (₹)")
-        party_chart_data = party_summary[["party_name", "Net Balance"]].set_index("party_name")
-        st.bar_chart(party_chart_data)
+            st.subheader("Shortage by Employee (₹)")
+            shortage_chart_data = shortage_summary[["employee_name", "shortage_amount"]].set_index("employee_name")
+            st.bar_chart(shortage_chart_data)
+            
+            # PDF Download for Employee Shortage
+            shortage_pdf = generate_pdf(
+                f"Employee Shortage Report{title_suffix}",
+                filtered_shortage_df,
+                ["Date", "employee_name", "shortage_amount"],
+                {"shortage_amount": filtered_shortage_df["shortage_amount"].sum()}
+            )
+            st.download_button("📜 Download Shortage PDF", shortage_pdf, f"shortage_report_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
 
-        # Detailed Party Ledger
-        st.subheader("Detailed Party Ledger")
-        for party in party_summary["party_name"].unique():
-            with st.expander(f"Ledger for {party}"):
-                party_transactions = filtered_party_df[filtered_party_df["party_name"] == party][["Date", "credit_amount", "debit_amount", "remark"]]
-                st.dataframe(party_transactions)
-                net_balance = party_summary[party_summary["party_name"] == party]["Net Balance"].values[0]
-                color = "#27ae60" if net_balance >= 0 else "#e74c3c"
-                st.markdown(f"<p style='font-weight: bold; color: {color};'>Net Balance: ₹{net_balance:.2f}</p>", unsafe_allow_html=True)
-                
-                # PDF Download for Party
-                party_pdf = generate_pdf(
-                    f"Party Ledger - {party}{title_suffix}",
-                    party_transactions,
-                    ["Date", "credit_amount", "debit_amount", "remark"],
-                    {"credit_amount": party_transactions["credit_amount"].sum(), "debit_amount": party_transactions["debit_amount"].sum()}
-                )
-                st.download_button(f"📜 Download {party} Ledger PDF", party_pdf, f"party_ledger_{party}_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
+        # Owner's Transaction Section
+        if not filtered_owners_df.empty:
+            st.markdown(f"<h2>👑 Owner’s Transactions{title_suffix}</h2>", unsafe_allow_html=True)
+            owners_credit = filtered_owners_df[filtered_owners_df["type"] == "Credit"]["amount"].sum()
+            owners_debit = filtered_owners_df[filtered_owners_df["type"] == "Debit"]["amount"].sum()
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>📈 Total Owner’s Credit (₹)</span><br><span class='metric-value' style='color: #27ae60;'>{owners_credit:.2f}</span></div>", unsafe_allow_html=True)
+            with col2:
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>📉 Total Owner’s Debit (₹)</span><br><span class='metric-value' style='color: #e74c3c;'>{owners_debit:.2f}</span></div>", unsafe_allow_html=True)
 
-    # Employee Shortage Section
-    if not filtered_shortage_df.empty:
-        st.markdown(f"<h2>👷 Employee Shortage{title_suffix}</h2>", unsafe_allow_html=True)
-        shortage_summary = filtered_shortage_df.groupby("employee_name").agg({
-            "shortage_amount": "sum"
-        }).reset_index()
-        
-        st.subheader("Employee Shortages")
-        st.dataframe(shortage_summary)
+            st.subheader("Owner’s Transaction Summary")
+            owners_summary = filtered_owners_df.groupby(["owner_name", "mode", "type"]).agg({"amount": "sum"}).reset_index()
+            st.dataframe(owners_summary)
 
-        st.subheader("Shortage by Employee (₹)")
-        shortage_chart_data = shortage_summary[["employee_name", "shortage_amount"]].set_index("employee_name")
-        st.bar_chart(shortage_chart_data)
-        
-        # PDF Download for Employee Shortage
-        shortage_pdf = generate_pdf(
-            f"Employee Shortage Report{title_suffix}",
-            filtered_shortage_df,
-            ["Date", "employee_name", "shortage_amount"],
-            {"shortage_amount": filtered_shortage_df["shortage_amount"].sum()}
-        )
-        st.download_button("📜 Download Shortage PDF", shortage_pdf, f"shortage_report_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
+            st.subheader("Owner’s Credit vs Debit by Owner (₹)")
+            owners_chart_data = filtered_owners_df.pivot_table(index="owner_name", columns="type", values="amount", aggfunc="sum", fill_value=0)
+            st.bar_chart(owners_chart_data)
+            
+            # PDF Download for Owner’s Transactions
+            owners_pdf = generate_pdf(
+                f"Owner’s Transactions Report{title_suffix}",
+                filtered_owners_df,
+                ["Date", "owner_name", "amount", "mode", "type"],
+                {"amount": filtered_owners_df["amount"].sum()}
+            )
+            st.download_button("📜 Download Owner’s Transactions PDF", owners_pdf, f"owners_transactions_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
 
-    # Owner's Transaction Section
-    if not filtered_owners_df.empty:
-        st.markdown(f"<h2>👑 Owner’s Transactions{title_suffix}</h2>", unsafe_allow_html=True)
-        owners_credit = filtered_owners_df[filtered_owners_df["type"] == "Credit"]["amount"].sum()
-        owners_debit = filtered_owners_df[filtered_owners_df["type"] == "Debit"]["amount"].sum()
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(f"<div class='metric-box'><span class='metric-label'>📈 Total Owner’s Credit (₹)</span><br><span class='metric-value' style='color: #27ae60;'>{owners_credit:.2f}</span></div>", unsafe_allow_html=True)
-        with col2:
-            st.markdown(f"<div class='metric-box'><span class='metric-label'>📉 Total Owner’s Debit (₹)</span><br><span class='metric-value' style='color: #e74c3c;'>{owners_debit:.2f}</span></div>", unsafe_allow_html=True)
+        # Downloads for CSV
+        if not filtered_sales_df.empty:
+            sales_csv = filtered_sales_df.to_csv(index=False)
+            st.download_button("📥 Download Sales CSV", data=sales_csv, file_name=f"sales_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
+        if not filtered_party_df.empty:
+            party_csv = filtered_party_df.to_csv(index=False)
+            st.download_button("📥 Download Party Ledger CSV", data=party_csv, file_name=f"party_ledger_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
+        if not filtered_shortage_df.empty:
+            shortage_csv = filtered_shortage_df.to_csv(index=False)
+            st.download_button("📥 Download Employee Shortage CSV", data=shortage_csv, file_name=f"shortage_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
+        if not filtered_owners_df.empty:
+            owners_csv = filtered_owners_df.to_csv(index=False)
+            st.download_button("📥 Download Owner’s Transactions CSV", data=owners_csv, file_name=f"owners_transactions_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
 
-        st.subheader("Owner’s Transaction Summary")
-        owners_summary = filtered_owners_df.groupby(["owner_name", "mode", "type"]).agg({"amount": "sum"}).reset_index()
-        st.dataframe(owners_summary)
-
-        st.subheader("Owner’s Credit vs Debit by Owner (₹)")
-        owners_chart_data = filtered_owners_df.pivot_table(index="owner_name", columns="type", values="amount", aggfunc="sum", fill_value=0)
-        st.bar_chart(owners_chart_data)
-        
-        # PDF Download for Owner’s Transactions
-        owners_pdf = generate_pdf(
-            f"Owner’s Transactions Report{title_suffix}",
-            filtered_owners_df,
-            ["Date", "owner_name", "amount", "mode", "type"],
-            {"amount": filtered_owners_df["amount"].sum()}
-        )
-        st.download_button("📜 Download Owner’s Transactions PDF", owners_pdf, f"owners_transactions_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
-
-    # Downloads for CSV
-    if not filtered_sales_df.empty:
-        sales_csv = filtered_sales_df.to_csv(index=False)
-        st.download_button("📥 Download Sales CSV", data=sales_csv, file_name=f"sales_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
-    if not filtered_party_df.empty:
-        party_csv = filtered_party_df.to_csv(index=False)
-        st.download_button("📥 Download Party Ledger CSV", data=party_csv, file_name=f"party_ledger_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
-    if not filtered_shortage_df.empty:
-        shortage_csv = filtered_shortage_df.to_csv(index=False)
-        st.download_button("📥 Download Employee Shortage CSV", data=shortage_csv, file_name=f"shortage_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
-    if not filtered_owners_df.empty:
-        owners_csv = filtered_owners_df.to_csv(index=False)
-        st.download_button("📥 Download Owner’s Transactions CSV", data=owners_csv, file_name=f"owners_transactions_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
-
-# Footer
-st.markdown("<hr><p style='text-align: center; color: #7f8c8d;'>Chhatrapati Petroleum</p>", unsafe_allow_html=True)
+    # Footer
+    st.markdown("<hr><p style='text-align: center; color: #7f8c8d;'>Chhatrapati Petroleum</p>", unsafe_allow_html=True)
