@@ -9,6 +9,8 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 import io
+import pdfplumber  # For PDF text extraction
+import re  # For parsing text
 
 # Set page config
 st.set_page_config(layout="wide", page_title="Petrol Pump Dashboard", page_icon="⛽")
@@ -36,7 +38,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Hardcoded credentials (for simplicity)
+# Hardcoded credentials
 VALID_CREDENTIALS = {
     "admin": "password123",
     "user": "petrol2025"
@@ -64,8 +66,8 @@ def show_login_page():
             if check_login(username, password):
                 st.session_state.authenticated = True
                 st.success(f"Welcome, {username}!")
-                time.sleep(1)  # Brief delay for user feedback
-                st.rerun()  # Refresh to show dashboard
+                time.sleep(1)
+                st.rerun()
             else:
                 st.error("Invalid username or password")
 
@@ -74,7 +76,9 @@ SALES_DATA_PATH = "petrol_sales.csv"
 PARTY_LEDGER_PATH = "party_ledger.csv"
 EMPLOYEE_SHORTAGE_PATH = "employee_shortage.csv"
 OWNERS_TRANSACTION_PATH = "owners_transaction.csv"
-CSV_FILES = [SALES_DATA_PATH, PARTY_LEDGER_PATH, EMPLOYEE_SHORTAGE_PATH, OWNERS_TRANSACTION_PATH]
+BANK_STATEMENTS_PATH = "bank_statements.csv"
+PARTY_CHEQUES_PATH = "party_cheques.csv"  # New file for cheque entries
+CSV_FILES = [SALES_DATA_PATH, PARTY_LEDGER_PATH, EMPLOYEE_SHORTAGE_PATH, OWNERS_TRANSACTION_PATH, BANK_STATEMENTS_PATH, PARTY_CHEQUES_PATH]
 
 # Initialize CSVs
 def init_csv():
@@ -106,6 +110,10 @@ def init_csv():
         pd.DataFrame(columns=["id", "date", "employee_name", "shortage_amount"]).to_csv(EMPLOYEE_SHORTAGE_PATH, index=False)
     if not os.path.exists(OWNERS_TRANSACTION_PATH):
         pd.DataFrame(columns=["id", "date", "owner_name", "amount", "mode", "type"]).to_csv(OWNERS_TRANSACTION_PATH, index=False)
+    if not os.path.exists(BANK_STATEMENTS_PATH):
+        pd.DataFrame(columns=["id", "date", "description", "debit", "credit", "balance"]).to_csv(BANK_STATEMENTS_PATH, index=False)
+    if not os.path.exists(PARTY_CHEQUES_PATH):
+        pd.DataFrame(columns=["id", "date", "party_name", "bank", "cheque_date", "cheque_no", "branch", "amount"]).to_csv(PARTY_CHEQUES_PATH, index=False)
 
 # Load Sales Data
 def load_sales_data():
@@ -172,6 +180,27 @@ def load_owners_transactions():
     except Exception as e:
         st.error(f"Owner's Transaction Load Error: {str(e)}")
         return pd.DataFrame(columns=["id", "date", "owner_name", "amount", "mode", "type", "Date"])
+
+# Load Bank Statements
+def load_bank_statements():
+    try:
+        df = pd.read_csv(BANK_STATEMENTS_PATH)
+        df["Date"] = pd.to_datetime(df["date"], errors='coerce')
+        return df
+    except Exception as e:
+        st.error(f"Bank Statement Load Error: {str(e)}")
+        return pd.DataFrame(columns=["id", "date", "description", "debit", "credit", "balance", "Date"])
+
+# Load Party Cheques
+def load_party_cheques():
+    try:
+        df = pd.read_csv(PARTY_CHEQUES_PATH)
+        df["Date"] = pd.to_datetime(df["date"], errors='coerce')
+        df["cheque_date"] = pd.to_datetime(df["cheque_date"], errors='coerce')
+        return df
+    except Exception as e:
+        st.error(f"Party Cheques Load Error: {str(e)}")
+        return pd.DataFrame(columns=["id", "date", "party_name", "bank", "cheque_date", "cheque_no", "branch", "amount", "Date"])
 
 # Save Sales Data
 def save_sales_data(selected_date, data_dict):
@@ -268,6 +297,50 @@ def save_owners_transaction(selected_date, owner_name, amount, mode, transaction
     df.to_csv(OWNERS_TRANSACTION_PATH, index=False)
     st.sidebar.success(f"Saved Owner's Transaction for {selected_date}! Rows now: {len(df)}")
 
+# Save Party Cheque Entry
+def save_party_cheque(selected_date, party_name, bank, cheque_date, cheque_no, branch, amount):
+    df = load_party_cheques()
+    new_id = df["id"].max() + 1 if not df.empty else 1
+    new_row = pd.DataFrame({
+        "id": [new_id], "date": [str(selected_date)],
+        "party_name": [party_name], "bank": [bank], "cheque_date": [str(cheque_date)],
+        "cheque_no": [cheque_no], "branch": [branch], "amount": [amount]
+    })
+    df = pd.concat([df.drop(columns=["Date"]), new_row], ignore_index=True)
+    df.to_csv(PARTY_CHEQUES_PATH, index=False)
+    st.sidebar.success(f"Saved Cheque Entry for {party_name} on {selected_date}! Rows now: {len(df)}")
+
+# Extract and Save Bank Statement
+def extract_and_save_bank_statement(pdf_file):
+    transactions = []
+    with pdfplumber.open(pdf_file) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if text:
+                lines = text.split("\n")
+                for line in lines:
+                    match = re.match(r"(\d{2}/\d{2}/\d{4})\s+(.+?)\s+(-?\d+\.\d{2})$", line.strip())
+                    if match:
+                        date, desc, amount = match.groups()
+                        amount = float(amount)
+                        transactions.append({
+                            "date": date,
+                            "description": desc,
+                            "debit": abs(amount) if amount < 0 else 0.0,
+                            "credit": amount if amount > 0 else 0.0,
+                            "balance": 0.0  # Placeholder
+                        })
+    
+    if transactions:
+        df = load_bank_statements()
+        new_id = df["id"].max() + 1 if not df.empty else 1
+        new_rows = [dict({"id": new_id + i}, **t) for i, t in enumerate(transactions)]
+        new_df = pd.DataFrame(new_rows)
+        df = pd.concat([df.drop(columns=["Date"], errors='ignore'), new_df], ignore_index=True)
+        df.to_csv(BANK_STATEMENTS_PATH, index=False)
+        return len(transactions)
+    return 0
+
 # Delete Sales Data
 def delete_sales_data(start_date, end_date):
     try:
@@ -276,10 +349,8 @@ def delete_sales_data(start_date, end_date):
             st.sidebar.write("No sales data to delete")
             return 0
         df["date"] = pd.to_datetime(df["date"], errors='coerce')
-        st.sidebar.write(f"Before deletion - Rows: {len(df)}")
         mask = (df["date"].dt.date < start_date) | (df["date"].dt.date > end_date)
         updated_df = df[mask]
-        st.sidebar.write(f"After filter (deleting {start_date} to {end_date}) - Rows: {len(updated_df)}")
         updated_df.to_csv(SALES_DATA_PATH, index=False)
         return len(df) - len(updated_df)
     except Exception as e:
@@ -321,12 +392,10 @@ def generate_pdf(title, data_df, columns, totals=None):
     elements = []
     styles = getSampleStyleSheet()
     
-    # Header
     elements.append(Paragraph(f"{title}", styles['Title']))
     elements.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
     elements.append(Spacer(1, 12))
     
-    # Table
     data = [columns] + data_df[columns].values.tolist()
     if totals:
         total_row = ["Total"] + [""] * (len(columns) - 1)
@@ -350,7 +419,6 @@ def generate_pdf(title, data_df, columns, totals=None):
     ]))
     elements.append(table)
     
-    # Footer
     elements.append(Spacer(1, 12))
     elements.append(Paragraph("Chhatrapati Petroleum", styles['Normal']))
     
@@ -364,51 +432,45 @@ def load_and_filter_data(display_start_date, display_end_date):
     party_df = load_party_ledger()
     shortage_df = load_employee_shortage()
     owners_df = load_owners_transactions()
-
-    st.sidebar.write(f"Displaying from {display_start_date} to {display_end_date}")
-    if not sales_df.empty:
-        st.sidebar.write("Raw Sales Dates:", sales_df["date"].tolist())
+    bank_df = load_bank_statements()
+    cheques_df = load_party_cheques()
 
     sales_mask = (sales_df["Date"].dt.date >= display_start_date) & (sales_df["Date"].dt.date <= display_end_date)
     party_mask = (party_df["Date"].dt.date >= display_start_date) & (party_df["Date"].dt.date <= display_end_date)
     shortage_mask = (shortage_df["Date"].dt.date >= display_start_date) & (shortage_df["Date"].dt.date <= display_end_date)
     owners_mask = (owners_df["Date"].dt.date >= display_start_date) & (owners_df["Date"].dt.date <= display_end_date)
+    bank_mask = (bank_df["Date"].dt.date >= display_start_date) & (bank_df["Date"].dt.date <= display_end_date)
+    cheques_mask = (cheques_df["Date"].dt.date >= display_start_date) & (cheques_df["Date"].dt.date <= display_end_date)
 
     filtered_sales_df = sales_df.loc[sales_mask]
     filtered_party_df = party_df.loc[party_mask]
     filtered_shortage_df = shortage_df.loc[shortage_mask]
     filtered_owners_df = owners_df.loc[owners_mask]
+    filtered_bank_df = bank_df.loc[bank_mask]
+    filtered_cheques_df = cheques_df.loc[cheques_mask]
 
-    st.sidebar.write(f"Filtered Sales Rows: {len(filtered_sales_df)}")
-    st.sidebar.write(f"Filtered Party Rows: {len(filtered_party_df)}")
-    st.sidebar.write(f"Filtered Shortage Rows: {len(filtered_shortage_df)}")
-    st.sidebar.write(f"Filtered Owners Rows: {len(filtered_owners_df)}")
+    return filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, filtered_bank_df, filtered_cheques_df, f" ({display_start_date} to {display_end_date})"
 
-    return filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, f" ({display_start_date} to {display_end_date})"
-
-# Main app logic (only shown if authenticated)
+# Main app logic
 if not st.session_state.authenticated:
     show_login_page()
 else:
-    init_csv()  # Initialize CSVs only after login
-    
-    # Title
+    init_csv()
     st.markdown("<h1>⛽ Petrol Pump Dashboard</h1>", unsafe_allow_html=True)
 
-    # Logout button in sidebar
+    # Sidebar
     st.sidebar.header("🔑 User Session")
     if st.sidebar.button("Logout"):
         st.session_state.authenticated = False
         st.rerun()
 
-    # Sidebar
     st.sidebar.header("📊 Data Entry")
     today = date.today()
     selected_date = st.sidebar.date_input("📅 Select Date for Entry", value=today)
     st.sidebar.write(f"Entering data for: {selected_date}")
 
     # Tabs for Data Entry Sections
-    sales_tab, party_tab, shortage_tab, owner_tab = st.sidebar.tabs(["Sales", "Party Ledger", "Shortage", "Owner’s Transaction"])
+    sales_tab, party_tab, shortage_tab, owner_tab, bank_tab = st.sidebar.tabs(["Sales", "Party Ledger", "Shortage", "Owner’s Transaction", "Bank Statements"])
 
     # Sales Tab
     with sales_tab:
@@ -502,6 +564,16 @@ else:
         if st.button("💾 Save Party Transaction", key="save_party"):
             save_party_ledger(selected_date, party_name, party_credit, party_debit, party_remark)
 
+        st.subheader("🏦 Party Cheque Entry")
+        cheque_party_name = st.text_input("Party Name (Cheque)", key="cheque_party_name")
+        cheque_bank = st.text_input("Bank Name", key="cheque_bank")
+        cheque_date = st.date_input("Cheque Date", value=today, key="cheque_date")
+        cheque_no = st.text_input("Cheque Number", key="cheque_no")
+        cheque_branch = st.text_input("Branch", key="cheque_branch")
+        cheque_amount = st.number_input("Cheque Amount (₹)", min_value=0.0, step=0.1, value=0.0, key="cheque_amount")
+        if st.button("💾 Save Cheque Entry", key="save_cheque"):
+            save_party_cheque(selected_date, cheque_party_name, cheque_bank, cheque_date, cheque_no, cheque_branch, cheque_amount)
+
     # Employee Shortage Tab
     with shortage_tab:
         st.subheader("👷 Employee Shortage")
@@ -520,7 +592,20 @@ else:
         if st.button("💾 Save Owner Transaction", key="save_owner"):
             save_owners_transaction(selected_date, owner_name, owner_amount, owner_mode, owner_type)
 
-    # Remaining Sidebar Sections (Outside Tabs)
+    # Bank Statements Tab
+    with bank_tab:
+        st.subheader("🏦 Bank Statements")
+        uploaded_pdf = st.file_uploader("Upload Bank Statement (PDF)", type="pdf", key="bank_pdf")
+        if uploaded_pdf and st.button("📤 Process Bank Statement", key="process_bank"):
+            num_transactions = extract_and_save_bank_statement(uploaded_pdf)
+            if num_transactions > 0:
+                st.sidebar.success(f"Extracted and saved {num_transactions} transactions!")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.sidebar.error("No transactions found in the PDF.")
+
+    # Remaining Sidebar Sections
     st.sidebar.subheader("🗑️ Delete Sales Data")
     delete_range = st.sidebar.date_input("📅 Delete Range", value=[today, today], key="delete_range")
     if len(delete_range) == 2:
@@ -561,14 +646,13 @@ else:
         display_start_date, display_end_date = selected_date, selected_date
 
     # Load and filter data
-    filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, title_suffix = load_and_filter_data(display_start_date, display_end_date)
+    filtered_sales_df, filtered_party_df, filtered_shortage_df, filtered_owners_df, filtered_bank_df, filtered_cheques_df, title_suffix = load_and_filter_data(display_start_date, display_end_date)
 
     # Display Dashboard
-    if filtered_sales_df.empty and filtered_party_df.empty and filtered_shortage_df.empty and filtered_owners_df.empty:
+    if filtered_sales_df.empty and filtered_party_df.empty and filtered_shortage_df.empty and filtered_owners_df.empty and filtered_bank_df.empty and filtered_cheques_df.empty:
         st.warning(f"No data available for the selected range{title_suffix}.")
     else:
         if not filtered_sales_df.empty:
-            # Sales Metrics
             st.markdown(f"<h2>📈 Key Metrics{title_suffix}</h2>", unsafe_allow_html=True)
             col1, col2, col3, col4, col5 = st.columns(5)
             with col1:
@@ -589,7 +673,6 @@ else:
             with col5:
                 st.markdown(f"<div class='metric-box'><span class='metric-label'>💵 Total Sales (₹)</span><br><span class='metric-value' style='color: #2980b9;'>₹{filtered_sales_df['total_sales_amount'].sum():.2f}</span></div>", unsafe_allow_html=True)
 
-            # Cash Flow Metrics
             st.markdown(f"<h2>💰 Cash Flow{title_suffix}</h2>", unsafe_allow_html=True)
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -604,11 +687,10 @@ else:
             with col4:
                 net_sales = filtered_sales_df["credit_balance"].sum()
                 party_net_balance = filtered_party_df["credit_amount"].sum() - filtered_party_df["debit_amount"].sum()
-                adjusted_net_sales = net_sales + party_net_balance - total_shortage
+                adjusted_net_sales = net_sales + party_net_balance - total_shortage  # Cheque amounts not subtracted from net sales
                 color = "#c0392b" if adjusted_net_sales > 0 else "#27ae60"
                 st.markdown(f"<div class='metric-box'><span class='metric-label'>📊 Net Sales (₹)</span><br><span class='metric-value' style='color: {color};'>{adjusted_net_sales:.2f}</span></div>", unsafe_allow_html=True)
 
-            # Visualizations
             st.markdown(f"<h2>📊 Visualizations{title_suffix}</h2>", unsafe_allow_html=True)
             col1, col2 = st.columns(2)
             with col1:
@@ -622,17 +704,10 @@ else:
                 st.subheader("Sales Breakdown (₹)")
                 payment_data = pd.DataFrame({
                     "Type": ["Petrol", "Diesel", "XP", "Oil", "Expenses"],
-                    "Amount (₹)": [
-                        petrol_sales_r,
-                        hsd_sales_r,
-                        xp_sales_r,
-                        oil_sales_r,
-                        total_expenses
-                    ]
+                    "Amount (₹)": [petrol_sales_r, hsd_sales_r, xp_sales_r, oil_sales_r, total_expenses]
                 })
                 st.bar_chart(payment_data.set_index("Type"))
 
-            # Sales Data Table
             st.subheader("📋 Sales Data")
             display_sales_df = filtered_sales_df[[
                 "Date", "petrol_c3_sales", "petrol_c4_sales", "petrol_a1_sales", "petrol_a2_sales",
@@ -645,7 +720,6 @@ else:
             ]]
             st.dataframe(display_sales_df)
             
-            # PDF Download for Sales
             sales_pdf = generate_pdf(
                 f"Sales Report{title_suffix}",
                 display_sales_df,
@@ -654,22 +728,26 @@ else:
             )
             st.download_button("📜 Download Sales PDF", sales_pdf, f"sales_report_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
 
-        # Party Ledger Section
-        if not filtered_party_df.empty:
+        if not filtered_party_df.empty or not filtered_cheques_df.empty:
             st.markdown(f"<h2>📒 Party Ledger{title_suffix}</h2>", unsafe_allow_html=True)
             party_summary = filtered_party_df.groupby("party_name").agg({
                 "credit_amount": "sum",
                 "debit_amount": "sum"
             }).reset_index()
-            party_summary["Net Balance"] = party_summary["credit_amount"] - party_summary["debit_amount"]
+            cheques_summary = filtered_cheques_df.groupby("party_name").agg({"amount": "sum"}).reset_index().rename(columns={"amount": "cheque_amount"})
+            party_summary = party_summary.merge(cheques_summary, on="party_name", how="left").fillna({"cheque_amount": 0.0})
+            party_summary["Net Balance"] = party_summary["credit_amount"] - party_summary["debit_amount"] - party_summary["cheque_amount"]
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 total_credit = party_summary["credit_amount"].sum()
                 st.markdown(f"<div class='metric-box'><span class='metric-label'>📈 Total Credit (₹)</span><br><span class='metric-value' style='color: #27ae60;'>{total_credit:.2f}</span></div>", unsafe_allow_html=True)
             with col2:
                 total_debit = party_summary["debit_amount"].sum()
                 st.markdown(f"<div class='metric-box'><span class='metric-label'>📉 Total Debit (₹)</span><br><span class='metric-value' style='color: #e74c3c;'>{total_debit:.2f}</span></div>", unsafe_allow_html=True)
+            with col3:
+                total_cheques = party_summary["cheque_amount"].sum()
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>🏦 Total Cheques (₹)</span><br><span class='metric-value' style='color: #2980b9;'>{total_cheques:.2f}</span></div>", unsafe_allow_html=True)
 
             st.subheader("Party Balances Summary")
             st.dataframe(party_summary)
@@ -678,17 +756,21 @@ else:
             party_chart_data = party_summary[["party_name", "Net Balance"]].set_index("party_name")
             st.bar_chart(party_chart_data)
 
-            # Detailed Party Ledger
             st.subheader("Detailed Party Ledger")
             for party in party_summary["party_name"].unique():
                 with st.expander(f"Ledger for {party}"):
                     party_transactions = filtered_party_df[filtered_party_df["party_name"] == party][["Date", "credit_amount", "debit_amount", "remark"]]
                     st.dataframe(party_transactions)
+                    
+                    party_cheques = filtered_cheques_df[filtered_cheques_df["party_name"] == party][["Date", "bank", "cheque_date", "cheque_no", "branch", "amount"]]
+                    if not party_cheques.empty:
+                        st.subheader(f"Cheque Transactions for {party}")
+                        st.dataframe(party_cheques)
+                    
                     net_balance = party_summary[party_summary["party_name"] == party]["Net Balance"].values[0]
                     color = "#27ae60" if net_balance >= 0 else "#e74c3c"
-                    st.markdown(f"<p style='font-weight: bold; color: {color};'>Net Balance: ₹{net_balance:.2f}</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='font-weight: bold; color: {color};'>Net Balance (after cheques): ₹{net_balance:.2f}</p>", unsafe_allow_html=True)
                     
-                    # PDF Download for Party
                     party_pdf = generate_pdf(
                         f"Party Ledger - {party}{title_suffix}",
                         party_transactions,
@@ -696,8 +778,16 @@ else:
                         {"credit_amount": party_transactions["credit_amount"].sum(), "debit_amount": party_transactions["debit_amount"].sum()}
                     )
                     st.download_button(f"📜 Download {party} Ledger PDF", party_pdf, f"party_ledger_{party}_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
+                    
+                    if not party_cheques.empty:
+                        cheque_pdf = generate_pdf(
+                            f"Party Cheques - {party}{title_suffix}",
+                            party_cheques,
+                            ["Date", "bank", "cheque_date", "cheque_no", "branch", "amount"],
+                            {"amount": party_cheques["amount"].sum()}
+                        )
+                        st.download_button(f"📜 Download {party} Cheques PDF", cheque_pdf, f"party_cheques_{party}_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
 
-        # Employee Shortage Section
         if not filtered_shortage_df.empty:
             st.markdown(f"<h2>👷 Employee Shortage{title_suffix}</h2>", unsafe_allow_html=True)
             shortage_summary = filtered_shortage_df.groupby("employee_name").agg({
@@ -711,7 +801,6 @@ else:
             shortage_chart_data = shortage_summary[["employee_name", "shortage_amount"]].set_index("employee_name")
             st.bar_chart(shortage_chart_data)
             
-            # PDF Download for Employee Shortage
             shortage_pdf = generate_pdf(
                 f"Employee Shortage Report{title_suffix}",
                 filtered_shortage_df,
@@ -720,7 +809,6 @@ else:
             )
             st.download_button("📜 Download Shortage PDF", shortage_pdf, f"shortage_report_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
 
-        # Owner's Transaction Section
         if not filtered_owners_df.empty:
             st.markdown(f"<h2>👑 Owner’s Transactions{title_suffix}</h2>", unsafe_allow_html=True)
             owners_credit = filtered_owners_df[filtered_owners_df["type"] == "Credit"]["amount"].sum()
@@ -740,7 +828,6 @@ else:
             owners_chart_data = filtered_owners_df.pivot_table(index="owner_name", columns="type", values="amount", aggfunc="sum", fill_value=0)
             st.bar_chart(owners_chart_data)
             
-            # PDF Download for Owner’s Transactions
             owners_pdf = generate_pdf(
                 f"Owner’s Transactions Report{title_suffix}",
                 filtered_owners_df,
@@ -749,6 +836,34 @@ else:
             )
             st.download_button("📜 Download Owner’s Transactions PDF", owners_pdf, f"owners_transactions_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
 
+        if not filtered_bank_df.empty:
+            st.markdown(f"<h2>🏦 Bank Statements{title_suffix}</h2>", unsafe_allow_html=True)
+            st.subheader("Extracted Transactions")
+            display_bank_df = filtered_bank_df[["Date", "description", "debit", "credit", "balance"]]
+            st.dataframe(display_bank_df)
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                total_debit = filtered_bank_df["debit"].sum()
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>📉 Total Debits (₹)</span><br><span class='metric-value' style='color: #e74c3c;'>{total_debit:.2f}</span></div>", unsafe_allow_html=True)
+            with col2:
+                total_credit = filtered_bank_df["credit"].sum()
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>📈 Total Credits (₹)</span><br><span class='metric-value' style='color: #27ae60;'>{total_credit:.2f}</span></div>", unsafe_allow_html=True)
+            with col3:
+                net_balance = total_credit - total_debit
+                color = "#27ae60" if net_balance >= 0 else "#e74c3c"
+                st.markdown(f"<div class='metric-box'><span class='metric-label'>💰 Net Balance (₹)</span><br><span class='metric-value' style='color: {color};'>{net_balance:.2f}</span></div>", unsafe_allow_html=True)
+
+            bank_csv = filtered_bank_df.to_csv(index=False)
+            st.download_button("📥 Download Bank Statement CSV", data=bank_csv, file_name=f"bank_statement_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
+            bank_pdf = generate_pdf(
+                f"Bank Statement{title_suffix}",
+                display_bank_df,
+                ["Date", "description", "debit", "credit", "balance"],
+                {"debit": total_debit, "credit": total_credit}
+            )
+            st.download_button("📜 Download Bank Statement PDF", bank_pdf, f"bank_statement_{display_start_date}_to_{display_end_date}.pdf", "application/pdf")
+
         # Downloads for CSV
         if not filtered_sales_df.empty:
             sales_csv = filtered_sales_df.to_csv(index=False)
@@ -756,6 +871,9 @@ else:
         if not filtered_party_df.empty:
             party_csv = filtered_party_df.to_csv(index=False)
             st.download_button("📥 Download Party Ledger CSV", data=party_csv, file_name=f"party_ledger_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
+        if not filtered_cheques_df.empty:
+            cheques_csv = filtered_cheques_df.to_csv(index=False)
+            st.download_button("📥 Download Party Cheques CSV", data=cheques_csv, file_name=f"party_cheques_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
         if not filtered_shortage_df.empty:
             shortage_csv = filtered_shortage_df.to_csv(index=False)
             st.download_button("📥 Download Employee Shortage CSV", data=shortage_csv, file_name=f"shortage_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
@@ -763,5 +881,4 @@ else:
             owners_csv = filtered_owners_df.to_csv(index=False)
             st.download_button("📥 Download Owner’s Transactions CSV", data=owners_csv, file_name=f"owners_transactions_{display_start_date}_to_{display_end_date}.csv", mime="text/csv")
 
-    # Footer
     st.markdown("<hr><p style='text-align: center; color: #7f8c8d;'>Chhatrapati Petroleum</p>", unsafe_allow_html=True)
